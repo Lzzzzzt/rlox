@@ -35,7 +35,6 @@ lazy_static! {
 pub struct Token {
     token_type: TokenType,
     lexeme: String,
-    // Todo: final Object literal;
     literal: Option<Literal>,
     #[allow(unused)]
     line: usize,
