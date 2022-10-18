@@ -1,4 +1,4 @@
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq)]
 pub enum TokenType {
     // 单字符标记
     LeftParen,
@@ -46,6 +46,5 @@ pub enum TokenType {
     Var,
     While,
 
-    EOF,
+    Eof,
 }
-

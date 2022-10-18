@@ -2,26 +2,23 @@ use std::fs::read_to_string;
 use std::io::{Result, stdout, Write};
 use std::path::PathBuf;
 
+use crate::lib::parser::Parser;
 use crate::lib::scanner::Scanner;
+use crate::lib::token::Token;
+use crate::lib::token_type::TokenType;
 
 static mut HAD_ERROR: bool = false;
 
 fn is_error() -> bool {
-    unsafe {
-        HAD_ERROR
-    }
+    unsafe { HAD_ERROR }
 }
 
 fn no_error() {
-    unsafe {
-        HAD_ERROR = false
-    }
+    unsafe { HAD_ERROR = false }
 }
 
 fn had_error() {
-    unsafe {
-        HAD_ERROR = true
-    }
+    unsafe { HAD_ERROR = true }
 }
 
 pub struct Lox {}
@@ -56,7 +53,7 @@ impl Lox {
             }
             self.run(line)?;
             no_error();
-        };
+        }
 
         Ok(())
     }
@@ -65,9 +62,11 @@ impl Lox {
         let mut scanner = Scanner::new(source);
         scanner.scan_tokens();
 
-        scanner.tokens.iter().for_each(|token| {
-            println!("{}", token)
-        });
+        let mut parser = Parser::new(scanner.tokens);
+
+        if let Ok(expression) = parser.parse() {
+            println!("{:?}", expression);
+        };
 
         Ok(())
     }
@@ -76,8 +75,20 @@ impl Lox {
         Self::report(line, "", msg);
     }
 
+    pub fn token_error(token: &Token, msg: &str) {
+        if token.token_type == TokenType::Eof {
+            Self::report(token.line, "at end", msg)
+        } else {
+            Self::report(token.line, format!("at `{}`", token.lexeme).as_str(), msg)
+        }
+    }
+
     fn report(line: usize, err_pos: &str, msg: &str) {
-        println!("[line {line}] Error {err_pos}: {msg}");
+        if err_pos.is_empty() {
+            println!("[line {line}] Error: {msg}");
+        } else {
+            println!("[line {line}] Error({err_pos}): {msg}");
+        }
         had_error()
     }
 }

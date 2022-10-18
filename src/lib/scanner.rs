@@ -29,7 +29,8 @@ impl Scanner {
             self.scan_token();
         }
 
-        self.tokens.push(Token::new(TokenType::EOF, "".into(), self.line));
+        self.tokens
+            .push(Token::new(TokenType::Eof, "".into(), self.line));
         // return self.tokens;
     }
 
@@ -47,18 +48,26 @@ impl Scanner {
             '-' => self.add_token(TokenType::Minus),
             '*' => self.add_token(TokenType::Star),
             ';' => self.add_token(TokenType::Semicolon),
-            '!' => self.add_token(
-                if self.expected('=') { TokenType::BangEqual } else { TokenType::Bang }
-            ),
-            '=' => self.add_token(
-                if self.expected('=') { TokenType::EqualEqual } else { TokenType::Equal }
-            ),
-            '<' => self.add_token(
-                if self.expected('=') { TokenType::LessEqual } else { TokenType::Less }
-            ),
-            '>' => self.add_token(
-                if self.expected('=') { TokenType::GreaterEqual } else { TokenType::Greater }
-            ),
+            '!' => self.add_token(if self.expected('=') {
+                TokenType::BangEqual
+            } else {
+                TokenType::Bang
+            }),
+            '=' => self.add_token(if self.expected('=') {
+                TokenType::EqualEqual
+            } else {
+                TokenType::Equal
+            }),
+            '<' => self.add_token(if self.expected('=') {
+                TokenType::LessEqual
+            } else {
+                TokenType::Less
+            }),
+            '>' => self.add_token(if self.expected('=') {
+                TokenType::GreaterEqual
+            } else {
+                TokenType::Greater
+            }),
             '/' => {
                 if self.expected('/') {
                     while self.nth(0) != '\n' || !self.is_at_end() {
@@ -93,6 +102,7 @@ impl Scanner {
 
         if self.is_at_end() {
             Lox::error(self.line, "Unterminated String.");
+            return;
         }
 
         self.advance();
@@ -135,14 +145,13 @@ impl Scanner {
         }
     }
 
-
     #[inline]
     fn is_at_end(&self) -> bool {
         self.current >= self.source.len()
     }
 
     fn nth(&self, n: usize) -> char {
-        if self.current + n > self.source.len() {
+        if self.current + n >= self.source.len() {
             return '\0';
         }
         self.source.chars().nth(self.current + n).unwrap()
@@ -150,7 +159,11 @@ impl Scanner {
 
     fn advance(&mut self) -> char {
         self.current += 1;
-        return self.source.chars().nth((self.current - 1) as usize).unwrap();
+        return self
+            .source
+            .chars()
+            .nth((self.current - 1) as usize)
+            .unwrap();
     }
 
     fn expected(&self, expected: char) -> bool {
@@ -167,11 +180,18 @@ impl Scanner {
 
     fn add_token(&mut self, token_type: TokenType) {
         let text = &self.source[self.start..self.current];
-        self.tokens.push(Token::new(token_type, text.into(), self.line));
+        self.tokens.push(
+            Token::new(token_type, text.into(), self.line)
+        );
     }
 
     fn add_token_with_literal(&mut self, token_type: TokenType, literal: Literal) {
         let text = &self.source[self.start..self.current];
-        self.tokens.push(Token::with_literal(token_type, text.into(), Some(literal), self.line));
+        self.tokens.push(Token::with_literal(
+            token_type,
+            text.into(),
+            Some(literal),
+            self.line,
+        ));
     }
 }
