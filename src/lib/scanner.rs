@@ -38,6 +38,8 @@ impl Scanner {
         let cur = self.advance();
 
         match cur {
+            '?' => self.add_token(TokenType::QuestionMark),
+            ':' => self.add_token(TokenType::Colon),
             '(' => self.add_token(TokenType::LeftParen),
             ')' => self.add_token(TokenType::RightParen),
             '{' => self.add_token(TokenType::LeftBrace),
@@ -48,26 +50,42 @@ impl Scanner {
             '-' => self.add_token(TokenType::Minus),
             '*' => self.add_token(TokenType::Star),
             ';' => self.add_token(TokenType::Semicolon),
-            '!' => self.add_token(if self.expected('=') {
-                TokenType::BangEqual
-            } else {
-                TokenType::Bang
-            }),
-            '=' => self.add_token(if self.expected('=') {
-                TokenType::EqualEqual
-            } else {
-                TokenType::Equal
-            }),
-            '<' => self.add_token(if self.expected('=') {
-                TokenType::LessEqual
-            } else {
-                TokenType::Less
-            }),
-            '>' => self.add_token(if self.expected('=') {
-                TokenType::GreaterEqual
-            } else {
-                TokenType::Greater
-            }),
+            '!' => {
+                self.add_token(if self.expected('=') {
+                    TokenType::BangEqual
+                } else {
+                    TokenType::Bang
+                });
+                self.advance();
+            },
+            '=' => {
+                let token = if self.expected('=') {
+                    self.advance();
+                    TokenType::EqualEqual
+                } else {
+                    TokenType::Equal
+                };
+                self.add_token(token);
+            },
+            '<' => {
+                let token = if self.expected('=') {
+                    self.advance();
+                    TokenType::LessEqual
+                } else {
+                    TokenType::Less
+                };
+                self.add_token(token);
+            },
+            '>' => {
+                let token = if self.expected('=') {
+                    self.advance();
+                    TokenType::GreaterEqual
+                } else {
+                    TokenType::Greater
+                };
+
+                self.add_token(token);
+            },
             '/' => {
                 if self.expected('/') {
                     while self.nth(0) != '\n' || !self.is_at_end() {

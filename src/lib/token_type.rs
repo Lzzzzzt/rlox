@@ -1,6 +1,7 @@
 #[derive(Debug, Copy, Clone, PartialEq)]
 pub enum TokenType {
     // 单字符标记
+    Colon,
     LeftParen,
     RightParen,
     LeftBrace,
@@ -9,6 +10,7 @@ pub enum TokenType {
     Dot,
     Minus,
     Plus,
+    QuestionMark,
     Semicolon,
     Slash,
     Star,

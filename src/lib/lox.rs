@@ -65,7 +65,7 @@ impl Lox {
         let mut parser = Parser::new(scanner.tokens);
 
         if let Ok(expression) = parser.parse() {
-            println!("{:?}", expression);
+            println!("{:#?}", expression);
         };
 
         Ok(())
@@ -85,9 +85,9 @@ impl Lox {
 
     fn report(line: usize, err_pos: &str, msg: &str) {
         if err_pos.is_empty() {
-            println!("[line {line}] Error: {msg}");
+            println!("[line {line}] LoxError: {msg}");
         } else {
-            println!("[line {line}] Error({err_pos}): {msg}");
+            println!("[line {line}] LoxError({err_pos}): {msg}");
         }
         had_error()
     }

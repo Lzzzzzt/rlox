@@ -1,5 +1,5 @@
-use crate::lib::error::Error;
-use crate::lib::error::Error::ParseError;
+use crate::lib::error::LoxError;
+use crate::lib::error::LoxError::ParseError;
 use crate::lib::expr::Expression;
 use crate::lib::token::{Literal, Token};
 use crate::lib::token_type::TokenType;
@@ -18,15 +18,35 @@ impl Parser {
         }
     }
 
-    pub fn parse(&mut self) -> Result<Expression, Error> {
+    pub fn parse(&mut self) -> Result<Expression, LoxError> {
         self.expression()
     }
 
-    fn expression(&mut self) -> Result<Expression, Error> {
-        self.equality()
+    fn expression(&mut self) -> Result<Expression, LoxError> {
+        if let Ok(expr) = self.ternary() {
+            Ok(expr)
+        } else {
+            self.equality()
+        }
     }
 
-    fn equality(&mut self) -> Result<Expression, Error> {
+    fn ternary(&mut self) -> Result<Expression, LoxError> {
+        let cmp = self.equality();
+
+        if self.matched(vec![TokenType::QuestionMark]) {
+            let true_value = self.ternary();
+            return if self.matched(vec![TokenType::Colon]) {
+                let false_value = self.ternary();
+                Ok(Expression::ternary(Box::new(cmp?), Box::new(true_value?), Box::new(false_value?)))
+            } else {
+                Err(Self::error(self.peek(), "Expected ':' after expression"))
+            }
+        };
+
+        cmp
+    }
+
+    fn equality(&mut self) -> Result<Expression, LoxError> {
         let mut expr = self.comparison();
 
         while self.matched(vec![TokenType::BangEqual, TokenType::EqualEqual]) {
@@ -38,7 +58,7 @@ impl Parser {
         expr
     }
 
-    fn comparison(&mut self) -> Result<Expression, Error> {
+    fn comparison(&mut self) -> Result<Expression, LoxError> {
         let mut expr = self.term();
 
         while self.matched(vec![TokenType::Greater, TokenType::GreaterEqual, TokenType::Less, TokenType::LessEqual]) {
@@ -50,7 +70,7 @@ impl Parser {
         expr
     }
 
-    fn term(&mut self) -> Result<Expression, Error> {
+    fn term(&mut self) -> Result<Expression, LoxError> {
         let mut expr = self.factor();
 
         while self.matched(vec![TokenType::Plus, TokenType::Minus]) {
@@ -62,7 +82,7 @@ impl Parser {
         expr
     }
 
-    fn factor(&mut self) -> Result<Expression, Error> {
+    fn factor(&mut self) -> Result<Expression, LoxError> {
         let mut expr = self.unary();
 
         while self.matched(vec![TokenType::Star, TokenType::Slash]) {
@@ -74,7 +94,7 @@ impl Parser {
         expr
     }
 
-    fn unary(&mut self) -> Result<Expression, Error> {
+    fn unary(&mut self) -> Result<Expression, LoxError> {
         if self.matched(vec![TokenType::Bang, TokenType::Minus]) {
             let op = self.previous();
             let right = self.unary();
@@ -84,7 +104,7 @@ impl Parser {
         self.primary()
     }
 
-    fn primary(&mut self) -> Result<Expression, Error> {
+    fn primary(&mut self) -> Result<Expression, LoxError> {
         if self.matched(vec![TokenType::False]) {
             Ok(Expression::literal(Literal::False))
         } else if self.matched(vec![TokenType::True]) {
@@ -113,7 +133,7 @@ impl Parser {
         false
     }
 
-    fn consume(&mut self, token_type: TokenType, msg: &str) -> Result<Token, Error> {
+    fn consume(&mut self, token_type: TokenType, msg: &str) -> Result<Token, LoxError> {
         if self.check(token_type) {
             return Ok(self.advance());
         }
@@ -144,7 +164,7 @@ impl Parser {
         (*self.tokens.get(self.current - 1).unwrap()).clone()
     }
 
-    fn error(token: &Token, msg: &str) -> Error {
+    fn error(token: &Token, msg: &str) -> LoxError {
         Lox::token_error(token, msg);
         ParseError
     }

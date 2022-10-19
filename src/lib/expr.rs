@@ -43,6 +43,7 @@ pub enum Expression {
     Logical { left: Box<Expression>, op: Token, right: Box<Expression> },
     Set { object: Box<Expression>, name: Token, value: Box<Expression> },
     Super { keyword: Token, method: Token },
+    Ternary { cmp: Box<Expression>, true_value: Box<Expression>, false_value: Box<Expression> },
     This { keyword: Token },
     Unary { op: Token, right: Box<Expression> },
     Variable { name: Token },
@@ -77,9 +78,13 @@ impl Expression {
     pub fn create_super(keyword: Token, method: Token) -> Expression {
         Expression::Super { keyword, method }
     }
+    pub fn ternary(cmp: Box<Expression>, true_value: Box<Expression>, false_value: Box<Expression>) -> Expression {
+        Expression::Ternary { cmp, true_value, false_value }
+    }
     pub fn this(keyword: Token) -> Expression {
         Expression::This { keyword }
     }
+
     pub fn unary(op: Token, right: Box<Expression>) -> Expression {
         Expression::Unary { op, right }
     }
