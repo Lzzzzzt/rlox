@@ -21,7 +21,7 @@ fn had_error() {
     unsafe { HAD_ERROR = true }
 }
 
-pub struct Lox {}
+pub struct Lox;
 
 impl Lox {
     pub fn new() -> Self {
