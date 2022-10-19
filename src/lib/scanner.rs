@@ -57,7 +57,7 @@ impl Scanner {
                     TokenType::Bang
                 });
                 self.advance();
-            },
+            }
             '=' => {
                 let token = if self.expected('=') {
                     self.advance();
@@ -66,7 +66,7 @@ impl Scanner {
                     TokenType::Equal
                 };
                 self.add_token(token);
-            },
+            }
             '<' => {
                 let token = if self.expected('=') {
                     self.advance();
@@ -75,7 +75,7 @@ impl Scanner {
                     TokenType::Less
                 };
                 self.add_token(token);
-            },
+            }
             '>' => {
                 let token = if self.expected('=') {
                     self.advance();
@@ -85,7 +85,7 @@ impl Scanner {
                 };
 
                 self.add_token(token);
-            },
+            }
             '/' => {
                 if self.expected('/') {
                     while self.nth(0) != '\n' || !self.is_at_end() {

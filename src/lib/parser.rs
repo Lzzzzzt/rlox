@@ -40,7 +40,7 @@ impl Parser {
                 Ok(Expression::ternary(Box::new(cmp?), Box::new(true_value?), Box::new(false_value?)))
             } else {
                 Err(Self::error(self.peek(), "Expected ':' after expression"))
-            }
+            };
         };
 
         cmp
