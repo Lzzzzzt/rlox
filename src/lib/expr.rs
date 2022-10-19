@@ -1,95 +1,69 @@
 use crate::lib::token::{Literal, Token};
+use paste::paste;
+macro_rules! expr {
+    ($($name: ident { $($attr: ident: $attr_type: ty), * }), * $(,)?) => {
+        paste! {
+            $(
+                #[derive(Debug)]
+                #[allow(dead_code)]
+                pub struct $name {
+                    $(pub $attr: $attr_type), *
+                }
+                
+                #[allow(dead_code)]
+                impl $name {
+                    pub fn new($($attr: $attr_type), *) -> Self {
+                        Self {
+                            $($attr), *
+                        }
+                    }
+                }
+            ) *
 
-// macro_rules! ast {
-//     ($($name: ident { $($attr: ident: $attr_type: ty), * }), * $(,)?) => {
-//         #[derive(Debug)]
-//         pub enum Expression {
-//             $($name { $($attr: $attr_type), * }), *
-//         }
-//
-//         impl Expression {
-//             $(
-//                 pub fn $name($($attr: $attr_type), *) -> Expression {
-//                     Expression::$name { $($attr), * }
-//                 }
-//
-//             )*
-//         }
-//     };
-// }
-//
-// ast! {
-//     assign { name: Token, value: Box<Expression> },
-//     binary { left: Box<Expression>, op: Token, right: Box<Expression> },
-//     call { callee: Box<Expression>, paren: Token, argument: Vec<Expression> },
-//     get { object: Box<Expression>, name: Token },
-//     grouping { expression: Box<Expression> },
-//     literal { value: literal },
-//     logical { left: Box<Expression>, op: Token, right: Box<Expression> },
-//     set { object: Box<Expression>, name: Token, value: Box<Expression> },
-//     Super { keyword: Token, method: Token },
-//     this { keyword: Token },
-//     unary { op: Token, right: Token },
-//     variable { name: Token },
-// }
+            #[derive(Debug)]
+            #[allow(dead_code)]
+            pub enum Expression {
+                $($name($name)), *
+            }
 
-#[derive(Debug)]
-pub enum Expression {
-    Assign { name: Token, value: Box<Expression> },
-    Binary { left: Box<Expression>, op: Token, right: Box<Expression> },
-    Call { callee: Box<Expression>, paren: Token, argument: Vec<Expression> },
-    Get { object: Box<Expression>, name: Token },
-    Grouping { expression: Box<Expression> },
-    Literal { value: Literal },
-    Logical { left: Box<Expression>, op: Token, right: Box<Expression> },
-    Set { object: Box<Expression>, name: Token, value: Box<Expression> },
-    Super { keyword: Token, method: Token },
-    Ternary { cmp: Box<Expression>, true_value: Box<Expression>, false_value: Box<Expression> },
-    This { keyword: Token },
-    Unary { op: Token, right: Box<Expression> },
-    Variable { name: Token },
+            #[allow(dead_code)]
+            impl Expression {
+                $(
+                    pub fn [<create_ $name: snake>]($($attr: $attr_type), *) -> Expression {
+                        Expression::$name ($name {$($attr), *})
+                    }
+                ) *
+
+                pub fn accept<V>(&self, visitor: &impl Visitor<V>) -> V {
+                    match self {
+                        $(
+                            Self::$name(expr) => visitor.[<visit_ $name: snake>](expr),
+                        ) *
+                    }
+                } 
+            }
+
+            pub trait Visitor<T> {
+                $(
+                    fn [<visit_ $name: snake>](&self, [<$name: snake>]: &$name) -> T;
+                )*
+            }
+        }
+    };
 }
 
-#[allow(unused)]
-impl Expression {
-    pub fn assign(name: Token, value: Box<Expression>) -> Expression {
-        Expression::Assign { name, value }
-    }
-    pub fn binary(left: Box<Expression>, op: Token, right: Box<Expression>) -> Expression {
-        Expression::Binary { left, op, right }
-    }
-    pub fn call(callee: Box<Expression>, paren: Token, argument: Vec<Expression>) -> Expression {
-        Expression::Call { callee, paren, argument }
-    }
-    pub fn get(object: Box<Expression>, name: Token) -> Expression {
-        Expression::Get { object, name }
-    }
-    pub fn grouping(expression: Box<Expression>) -> Expression {
-        Expression::Grouping { expression }
-    }
-    pub fn literal(value: Literal) -> Expression {
-        Expression::Literal { value }
-    }
-    pub fn logical(left: Box<Expression>, op: Token, right: Box<Expression>) -> Expression {
-        Expression::Logical { left, op, right }
-    }
-    pub fn set(object: Box<Expression>, name: Token, value: Box<Expression>) -> Expression {
-        Expression::Set { object, name, value }
-    }
-    pub fn create_super(keyword: Token, method: Token) -> Expression {
-        Expression::Super { keyword, method }
-    }
-    pub fn ternary(cmp: Box<Expression>, true_value: Box<Expression>, false_value: Box<Expression>) -> Expression {
-        Expression::Ternary { cmp, true_value, false_value }
-    }
-    pub fn this(keyword: Token) -> Expression {
-        Expression::This { keyword }
-    }
-
-    pub fn unary(op: Token, right: Box<Expression>) -> Expression {
-        Expression::Unary { op, right }
-    }
-    pub fn variable(name: Token) -> Expression {
-        Expression::Variable { name }
-    }
+expr! {
+    AssignExpression { name: Token, value: Box<Expression> },
+    BinaryExpression { left: Box<Expression>, op: Token, right: Box<Expression> },
+    CallExpression { callee: Box<Expression>, paren: Token, argument: Vec<Expression> },
+    GetExpression { object: Box<Expression>, name: Token },
+    GroupingExpression { expression: Box<Expression> },
+    LiteralExpression { value: Literal },
+    LogicalExpression { left: Box<Expression>, op: Token, right: Box<Expression> },
+    SetExpression { object: Box<Expression>, name: Token, value: Box<Expression> },
+    SuperExpression { keyword: Token, method: Token },
+    ThisExpression { keyword: Token },
+    TernaryExpression { cmp: Box<Expression>, true_value: Box<Expression>, false_value: Box<Expression> },
+    UnaryExpression { op: Token, right: Box<Expression> },
+    VariableExpression { name: Token },
 }

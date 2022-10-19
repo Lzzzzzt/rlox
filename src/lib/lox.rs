@@ -7,6 +7,8 @@ use crate::lib::scanner::Scanner;
 use crate::lib::token::Token;
 use crate::lib::token_type::TokenType;
 
+use super::ast_printer::AstPrinter;
+
 static mut HAD_ERROR: bool = false;
 
 fn is_error() -> bool {
@@ -67,7 +69,7 @@ impl Lox {
         let mut parser = Parser::new(scanner.tokens);
 
         if let Ok(expression) = parser.parse() {
-            println!("{:#?}", expression);
+            println!("{}", AstPrinter::new().print(&expression));
         };
 
         Ok(())

@@ -12,10 +12,7 @@ pub struct Parser {
 
 impl Parser {
     pub fn new(tokens: Vec<Token>) -> Self {
-        Self {
-            tokens,
-            current: 0,
-        }
+        Self { tokens, current: 0 }
     }
 
     pub fn parse(&mut self) -> Result<Expression, LoxError> {
@@ -32,7 +29,11 @@ impl Parser {
         while self.matched(vec![TokenType::Comma]) {
             let op = self.previous();
             let right = self.ternary();
-            expr = Ok(Expression::binary(Box::new(expr?), op, Box::new(right?)))
+            expr = Ok(Expression::create_binary_expression(
+                Box::new(expr?),
+                op,
+                Box::new(right?),
+            ));
         }
 
         expr
@@ -45,7 +46,7 @@ impl Parser {
             let true_value = self.ternary();
             return if self.matched(vec![TokenType::Colon]) {
                 let false_value = self.ternary();
-                Ok(Expression::ternary(Box::new(cmp?), Box::new(true_value?), Box::new(false_value?)))
+                Ok(Expression::create_ternary_expression(Box::new(cmp?), Box::new(true_value?), Box::new(false_value?)))
             } else {
                 Err(Self::error(self.peek(), "Expected ':' after expression"))
             };
@@ -60,7 +61,11 @@ impl Parser {
         while self.matched(vec![TokenType::BangEqual, TokenType::EqualEqual]) {
             let op = self.previous();
             let right = self.comparison();
-            expr = Ok(Expression::binary(Box::new(expr?), op.clone(), Box::new(right?)));
+            expr = Ok(Expression::create_binary_expression(
+                Box::new(expr?),
+                op,
+                Box::new(right?),
+            ));
         }
 
         expr
@@ -69,10 +74,19 @@ impl Parser {
     fn comparison(&mut self) -> Result<Expression, LoxError> {
         let mut expr = self.term();
 
-        while self.matched(vec![TokenType::Greater, TokenType::GreaterEqual, TokenType::Less, TokenType::LessEqual]) {
+        while self.matched(vec![
+            TokenType::Greater,
+            TokenType::GreaterEqual,
+            TokenType::Less,
+            TokenType::LessEqual,
+        ]) {
             let op = self.previous();
             let right = self.term();
-            expr = Ok(Expression::binary(Box::new(expr?), op.clone(), Box::new(right?)));
+            expr = Ok(Expression::create_binary_expression(
+                Box::new(expr?),
+                op,
+                Box::new(right?),
+            ));
         }
 
         expr
@@ -84,7 +98,11 @@ impl Parser {
         while self.matched(vec![TokenType::Plus, TokenType::Minus]) {
             let op = self.previous();
             let right = self.factor();
-            expr = Ok(Expression::binary(Box::new(expr?), op.clone(), Box::new(right?)));
+            expr = Ok(Expression::create_binary_expression(
+                Box::new(expr?),
+                op,
+                Box::new(right?),
+            ));
         }
 
         expr
@@ -96,7 +114,11 @@ impl Parser {
         while self.matched(vec![TokenType::Star, TokenType::Slash]) {
             let op = self.previous();
             let right = self.unary();
-            expr = Ok(Expression::binary(Box::new(expr?), op.clone(), Box::new(right?)));
+            expr = Ok(Expression::create_binary_expression(
+                Box::new(expr?),
+                op,
+                Box::new(right?),
+            ));
         }
 
         expr
@@ -106,7 +128,7 @@ impl Parser {
         if self.matched(vec![TokenType::Bang, TokenType::Minus]) {
             let op = self.previous();
             let right = self.unary();
-            return Ok(Expression::unary(op, Box::new(right?)));
+            return Ok(Expression::create_unary_expression(op, Box::new(right?)));
         }
 
         self.primary()
@@ -114,26 +136,31 @@ impl Parser {
 
     fn primary(&mut self) -> Result<Expression, LoxError> {
         if self.matched(vec![TokenType::False]) {
-            Ok(Expression::literal(Literal::False))
+            Ok(Expression::create_literal_expression(Literal::False))
         } else if self.matched(vec![TokenType::True]) {
-            Ok(Expression::literal(Literal::True))
+            Ok(Expression::create_literal_expression(Literal::True))
         } else if self.matched(vec![TokenType::Nil]) {
-            Ok(Expression::literal(Literal::Nil))
+            Ok(Expression::create_literal_expression(Literal::Nil))
         } else if self.matched(vec![TokenType::Number, TokenType::String]) {
-            Ok(Expression::literal(self.previous().literal.unwrap()))
+            Ok(Expression::create_literal_expression(self.previous().literal.unwrap()))
         } else if self.matched(vec![TokenType::LeftParen]) {
             let expr = self.expression();
-            self.consume(TokenType::RightParen, "Expect ')' after expression.").unwrap();
-            Ok(Expression::grouping(Box::new(expr?)))
+            self.consume(TokenType::RightParen, "Expect ')' after expression.")
+                .unwrap();
+            Ok(Expression::create_grouping_expression(Box::new(expr?)))
         } else {
-            use TokenType::{Star, Slash, Comma, Greater, GreaterEqual, Less, LessEqual, EqualEqual, BangEqual};
+            use TokenType::{
+                BangEqual, Comma, EqualEqual, Greater, GreaterEqual, Less, LessEqual, Slash, Star,
+            };
             let token = self.peek();
 
             match token.token_type {
-                Star | Slash | Comma | Greater | GreaterEqual | Less | LessEqual | EqualEqual | BangEqual => {
-                    Err(Self::error(token, format!("Expect a expression before '{}'", token.lexeme).as_str()))
-                }
-                _ => Err(Self::error(token, "Expect expression."))
+                Star | Slash | Comma | Greater | GreaterEqual | Less | LessEqual | EqualEqual
+                | BangEqual => Err(Self::error(
+                    token,
+                    format!("Expect a expression before '{}'", token.lexeme).as_str(),
+                )),
+                _ => Err(Self::error(token, "Expect expression.")),
             }
         }
     }
@@ -193,7 +220,7 @@ impl Parser {
             if self.previous().token_type == TokenType::Semicolon {
                 return;
             }
-            use TokenType::{Class, Fun, Var, For, If, While, Print, Return};
+            use TokenType::{Class, For, Fun, If, Print, Return, Var, While};
 
             match self.previous().token_type {
                 Class | Fun | Var | For | If | While | Print | Return => {

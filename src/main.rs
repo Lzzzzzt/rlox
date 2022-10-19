@@ -1,13 +1,14 @@
-use std::{env, io};
+mod lib;
 
+use std::{env, io};
 use crate::lib::lox::Lox;
 
-mod lib;
 
 fn main() -> io::Result<()> {
     let mut args = env::args();
     let lox_compiler = Lox::new();
     args.next();
+
 
     if args.len() == 0 {
         lox_compiler.run_prompt()?;
