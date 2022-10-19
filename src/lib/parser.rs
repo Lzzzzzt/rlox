@@ -23,11 +23,19 @@ impl Parser {
     }
 
     fn expression(&mut self) -> Result<Expression, LoxError> {
-        if let Ok(expr) = self.ternary() {
-            Ok(expr)
-        } else {
-            self.equality()
+        self.comma()
+    }
+
+    fn comma(&mut self) -> Result<Expression, LoxError> {
+        let mut expr = self.ternary();
+
+        while self.matched(vec![TokenType::Comma]) {
+            let op = self.previous();
+            let right = self.ternary();
+            expr = Ok(Expression::binary(Box::new(expr?), op, Box::new(right?)))
         }
+
+        expr
     }
 
     fn ternary(&mut self) -> Result<Expression, LoxError> {
@@ -118,7 +126,15 @@ impl Parser {
             self.consume(TokenType::RightParen, "Expect ')' after expression.").unwrap();
             Ok(Expression::grouping(Box::new(expr?)))
         } else {
-            Err(Self::error(self.peek(), "Expect expression."))
+            use TokenType::{Star, Slash, Comma, Greater, GreaterEqual, Less, LessEqual, EqualEqual, BangEqual};
+            let token = self.peek();
+
+            match token.token_type {
+                Star | Slash | Comma | Greater | GreaterEqual | Less | LessEqual | EqualEqual | BangEqual => {
+                    Err(Self::error(token, format!("Expect a expression before '{}'", token.lexeme).as_str()))
+                }
+                _ => Err(Self::error(token, "Expect expression."))
+            }
         }
     }
 

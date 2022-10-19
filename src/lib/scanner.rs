@@ -51,12 +51,13 @@ impl Scanner {
             '*' => self.add_token(TokenType::Star),
             ';' => self.add_token(TokenType::Semicolon),
             '!' => {
-                self.add_token(if self.expected('=') {
+                let token = if self.expected('=') {
+                    self.advance();
                     TokenType::BangEqual
                 } else {
                     TokenType::Bang
-                });
-                self.advance();
+                };
+                self.add_token(token);
             }
             '=' => {
                 let token = if self.expected('=') {

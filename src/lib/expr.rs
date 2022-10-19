@@ -2,6 +2,7 @@ use crate::lib::token::{Literal, Token};
 
 // macro_rules! ast {
 //     ($($name: ident { $($attr: ident: $attr_type: ty), * }), * $(,)?) => {
+//         #[derive(Debug)]
 //         pub enum Expression {
 //             $($name { $($attr: $attr_type), * }), *
 //         }
