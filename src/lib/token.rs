@@ -5,13 +5,23 @@ use lazy_static::lazy_static;
 
 use crate::lib::token_type::TokenType;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Literal {
     String(String),
-    Number(f32),
-    False,
-    True,
+    Number(f64),
+    Bool(bool),
     Nil,
+}
+
+impl Display for Literal {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Literal::String(str) => write!(f, "{}", str),
+            Literal::Number(num) => write!(f, "{}", num),
+            Literal::Bool(b) => write!(f, "{}", b),
+            Literal::Nil => write!(f, "Nil"),
+        }
+    }
 }
 
 lazy_static! {

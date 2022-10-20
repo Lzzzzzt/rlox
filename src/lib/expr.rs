@@ -1,7 +1,7 @@
 use crate::lib::token::{Literal, Token};
 use paste::paste;
 macro_rules! expr {
-    ($($name: ident { $($attr: ident: $attr_type: ty), * }), * $(,)?) => {
+    ($($name: ident { $($attr: ident: $attr_type: ty), * }),* $(,)?) => {
         paste! {
             $(
                 #[derive(Debug)]
@@ -34,7 +34,7 @@ macro_rules! expr {
                     }
                 ) *
 
-                pub fn accept<V>(&self, visitor: &impl Visitor<V>) -> V {
+                pub fn accept<T, E>(&self, visitor: &impl Visitor<T, E>) -> Result<T, E> {
                     match self {
                         $(
                             Self::$name(expr) => visitor.[<visit_ $name: snake>](expr),
@@ -43,9 +43,9 @@ macro_rules! expr {
                 } 
             }
 
-            pub trait Visitor<T> {
+            pub trait Visitor<T, E> {
                 $(
-                    fn [<visit_ $name: snake>](&self, [<$name: snake>]: &$name) -> T;
+                    fn [<visit_ $name: snake>](&self, [<$name: snake>]: &$name) -> Result<T, E>;
                 )*
             }
         }

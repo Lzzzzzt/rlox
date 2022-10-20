@@ -1,13 +1,14 @@
 use std::fs::read_to_string;
-use std::io::{Result, stdout, Write};
+use std::io::{stdout, Write};
 use std::path::PathBuf;
 
 use crate::lib::parser::Parser;
 use crate::lib::scanner::Scanner;
-use crate::lib::token::Token;
 use crate::lib::token_type::TokenType;
 
-use super::ast_printer::AstPrinter;
+use super::error::LoxError;
+// use super::ast_printer::AstPrinter;
+use super::interpreter::Interpreter;
 
 static mut HAD_ERROR: bool = false;
 
@@ -23,16 +24,20 @@ fn had_error() {
     unsafe { HAD_ERROR = true }
 }
 
-pub struct Lox;
+pub struct Lox {
+    interpreter: Interpreter,
+}
 
 impl Lox {
     pub fn new() -> Self {
-        Self {}
+        Self {
+            interpreter: Interpreter
+        }
     }
 
-    pub fn run_file(self, path: PathBuf) -> Result<()> {
+    pub fn run_file(self, path: PathBuf) -> Result<(), LoxError> {
         let string = read_to_string(path)?;
-        self.run(string)?;
+        self.run(string);
 
         if is_error() {
             panic!("Exit because error before!");
@@ -41,7 +46,7 @@ impl Lox {
         Ok(())
     }
 
-    pub fn run_prompt(self) -> Result<()> {
+    pub fn run_prompt(self) -> Result<(), LoxError> {
         let stdin = std::io::stdin();
 
         loop {
@@ -53,45 +58,73 @@ impl Lox {
             if len == 0 {
                 break;
             }
-            self.run(line)?;
+            self.run(line);
             no_error();
         }
 
         Ok(())
     }
 
-    fn run(&self, source: String) -> Result<()> {
+    fn run(&self, source: String) {
         let mut scanner = Scanner::new(source);
-        scanner.scan_tokens();
 
+        if let Err(err) = scanner.scan_tokens() {
+            Self::error(err);
+            had_error();
+        }
         // println!("{:#?}", scanner.tokens);
 
         let mut parser = Parser::new(scanner.tokens);
 
-        if let Ok(expression) = parser.parse() {
-            println!("{}", AstPrinter::new().print(&expression));
-        };
+        match parser.parse() {
+            Ok(expression) => {
+                match self.interpreter.interpreter(expression) {
+                    Ok(value) => println!("{}", value),
+                    Err(err) => Self::error(err),
+                }
+            },
+            Err(err) => Self::error(err),
+        }
 
-        Ok(())
+        if is_error() {
+            return;
+        }
     }
 
-    pub fn error(line: usize, msg: &str) {
-        Self::report(line, "", msg);
-    }
-
-    pub fn token_error(token: &Token, msg: &str) {
-        if token.token_type == TokenType::Eof {
-            Self::report(token.line, "at end", msg)
-        } else {
-            Self::report(token.line, format!("at `{}`", token.lexeme).as_str(), msg)
+    pub fn error(error: LoxError) {
+        match error {
+            LoxError::ParseError { line, lexeme, msg, token_type } => {
+                if token_type == TokenType::Eof {
+                    Self::report(line, "at end", msg.as_str())
+                } else {
+                    Self::report(line, format!("at `{}`", lexeme).as_str(), msg.as_str())
+                }
+            },
+            LoxError::RuntimeError { line, lexeme, msg } => {
+                Self::report(line, format!("at `{}`", lexeme).as_str(), msg.as_str())
+            },
+            LoxError::IoError { msg } => {
+                Self::report(0, "", msg.as_str())
+            },
+            LoxError::ParseTokenError { line, msg } => {
+                Self::report(line, "", msg)
+            },
         }
     }
 
     fn report(line: usize, err_pos: &str, msg: &str) {
         if err_pos.is_empty() {
-            println!("[line {line}] LoxError: {msg}");
+            if line != 0 {
+                println!("[line {line}] LoxError: {msg}");
+            } else {
+                println!("[line] LoxError: {msg}");
+            }
         } else {
-            println!("[line {line}] LoxError({err_pos}): {msg}");
+            if line != 0 {
+                println!("[line {line}] LoxError {err_pos}: {msg}");
+            } else {
+                println!("[line] LoxError {err_pos}: {msg}");
+            }
         }
         had_error()
     }

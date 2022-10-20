@@ -3,7 +3,6 @@ use crate::lib::error::LoxError::ParseError;
 use crate::lib::expr::Expression;
 use crate::lib::token::{Literal, Token};
 use crate::lib::token_type::TokenType;
-use crate::Lox;
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -16,7 +15,16 @@ impl Parser {
     }
 
     pub fn parse(&mut self) -> Result<Expression, LoxError> {
-        self.expression()
+        let expr = self.expression();
+
+        if self.is_at_end() {
+            expr
+        } else {
+            Err(Self::error(
+                self.peek(),
+                format!("Unexpected character {:?}", self.peek().lexeme).as_str(),
+            ))
+        }
     }
 
     fn expression(&mut self) -> Result<Expression, LoxError> {
@@ -46,7 +54,11 @@ impl Parser {
             let true_value = self.ternary();
             return if self.matched(vec![TokenType::Colon]) {
                 let false_value = self.ternary();
-                Ok(Expression::create_ternary_expression(Box::new(cmp?), Box::new(true_value?), Box::new(false_value?)))
+                Ok(Expression::create_ternary_expression(
+                    Box::new(cmp?),
+                    Box::new(true_value?),
+                    Box::new(false_value?),
+                ))
             } else {
                 Err(Self::error(self.peek(), "Expected ':' after expression"))
             };
@@ -136,13 +148,15 @@ impl Parser {
 
     fn primary(&mut self) -> Result<Expression, LoxError> {
         if self.matched(vec![TokenType::False]) {
-            Ok(Expression::create_literal_expression(Literal::False))
+            Ok(Expression::create_literal_expression(Literal::Bool(false)))
         } else if self.matched(vec![TokenType::True]) {
-            Ok(Expression::create_literal_expression(Literal::True))
+            Ok(Expression::create_literal_expression(Literal::Bool(true)))
         } else if self.matched(vec![TokenType::Nil]) {
             Ok(Expression::create_literal_expression(Literal::Nil))
         } else if self.matched(vec![TokenType::Number, TokenType::String]) {
-            Ok(Expression::create_literal_expression(self.previous().literal.unwrap()))
+            Ok(Expression::create_literal_expression(
+                self.previous().literal.unwrap(),
+            ))
         } else if self.matched(vec![TokenType::LeftParen]) {
             let expr = self.expression();
             self.consume(TokenType::RightParen, "Expect ')' after expression.")
@@ -208,8 +222,12 @@ impl Parser {
     }
 
     fn error(token: &Token, msg: &str) -> LoxError {
-        Lox::token_error(token, msg);
-        ParseError
+        ParseError {
+            line: token.line,
+            lexeme: token.lexeme.clone(),
+            token_type: token.token_type,
+            msg: msg.into(),
+        }
     }
 
     #[allow(unused)]

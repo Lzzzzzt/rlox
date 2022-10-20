@@ -1,6 +1,7 @@
 use crate::lib::token::{KEYWORD_MAP, Literal, Token};
 use crate::lib::token_type::TokenType;
-use crate::Lox;
+
+use super::error::LoxError;
 
 pub struct Scanner {
     source: String,
@@ -23,18 +24,20 @@ impl Scanner {
         }
     }
 
-    pub fn scan_tokens(&mut self) {
+    pub fn scan_tokens(&mut self) -> Result<(), LoxError> {
         while !self.is_at_end() {
             self.start = self.current;
-            self.scan_token();
+            self.scan_token()?;
         }
 
         self.tokens
             .push(Token::new(TokenType::Eof, "".into(), self.line));
         // return self.tokens;
+
+        Ok(())
     }
 
-    fn scan_token(&mut self) {
+    fn scan_token(&mut self) -> Result<(), LoxError> {
         let cur = self.advance();
 
         match cur {
@@ -98,20 +101,21 @@ impl Scanner {
             }
             ' ' | '\r' | '\t' => (),
             '\n' => self.line += 1,
-            '"' => self.parse_string(),
+            '"' => self.parse_string()?,
             _ => {
                 if cur.is_ascii_digit() {
                     self.parse_number();
                 } else if cur.is_ascii_alphabetic() || cur == '_' {
                     self.parse_identifier();
                 } else {
-                    Lox::error(self.line, "Unexpected character.");
+                    return Err(LoxError::ParseTokenError { line: self.line, msg: "Unexpected character." });
                 }
             }
         }
+        Ok(())
     }
 
-    fn parse_string(&mut self) {
+    fn parse_string(&mut self) -> Result<(), LoxError> {
         while self.nth(0) != '"' && !self.is_at_end() {
             if self.nth(0) == '\n' {
                 self.line += 1;
@@ -120,8 +124,8 @@ impl Scanner {
         }
 
         if self.is_at_end() {
-            Lox::error(self.line, "Unterminated String.");
-            return;
+            return Err(LoxError::ParseTokenError { line: self.line, msg: "Unterminated String." });
+
         }
 
         self.advance();
@@ -130,6 +134,8 @@ impl Scanner {
             TokenType::String,
             Literal::String(self.source[self.start + 1..self.current - 1].into()),
         );
+
+        Ok(())
     }
 
     fn parse_number(&mut self) {
