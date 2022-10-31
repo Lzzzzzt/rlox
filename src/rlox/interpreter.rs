@@ -9,7 +9,7 @@ pub struct Interpreter;
 
 impl Interpreter {
     pub fn interpreter(&self, expr: Expression) -> Result<Literal, LoxError> {
-        Ok(self.evaluate(&expr)?)
+        self.evaluate(&expr)
     }
 
     fn evaluate(&self, expr: &Expression) -> Result<Literal, LoxError> {
@@ -43,7 +43,11 @@ impl Interpreter {
             return Ok(*b);
         }
 
-        Err(LoxError::RuntimeError { line: 0, lexeme: obj.to_string(), msg: "Expected type is `bool`".into() })
+        Err(LoxError::RuntimeError {
+            line: 0,
+            lexeme: obj.to_string(),
+            msg: "Expected type is `bool`".into(),
+        })
     }
 
     fn is_true(&self, obj: Literal) -> bool {
@@ -131,7 +135,7 @@ impl Visitor<Literal, LoxError> for Interpreter {
         &self,
         grouping_expression: &super::expr::GroupingExpression,
     ) -> Result<Literal, LoxError> {
-        Ok(self.evaluate(&grouping_expression.expression)?)
+        self.evaluate(&grouping_expression.expression)
     }
 
     fn visit_literal_expression(

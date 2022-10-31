@@ -1,4 +1,4 @@
-use crate::rlox::token::{KEYWORD_MAP, Literal, Token};
+use crate::rlox::token::{Literal, Token, KEYWORD_MAP};
 use crate::rlox::token_type::TokenType;
 
 use super::error::LoxError;
@@ -108,7 +108,10 @@ impl Scanner {
                 } else if cur.is_ascii_alphabetic() || cur == '_' {
                     self.parse_identifier();
                 } else {
-                    return Err(LoxError::ParseTokenError { line: self.line, msg: "Unexpected character." });
+                    return Err(LoxError::ParseTokenError {
+                        line: self.line,
+                        msg: "Unexpected character.",
+                    });
                 }
             }
         }
@@ -124,8 +127,10 @@ impl Scanner {
         }
 
         if self.is_at_end() {
-            return Err(LoxError::ParseTokenError { line: self.line, msg: "Unterminated String." });
-
+            return Err(LoxError::ParseTokenError {
+                line: self.line,
+                msg: "Unterminated String.",
+            });
         }
 
         self.advance();
@@ -184,11 +189,7 @@ impl Scanner {
 
     fn advance(&mut self) -> char {
         self.current += 1;
-        return self
-            .source
-            .chars()
-            .nth((self.current - 1) as usize)
-            .unwrap();
+        return self.source.chars().nth(self.current - 1).unwrap();
     }
 
     fn expected(&self, expected: char) -> bool {
@@ -205,9 +206,8 @@ impl Scanner {
 
     fn add_token(&mut self, token_type: TokenType) {
         let text = &self.source[self.start..self.current];
-        self.tokens.push(
-            Token::new(token_type, text.into(), self.line)
-        );
+        self.tokens
+            .push(Token::new(token_type, text.into(), self.line));
     }
 
     fn add_token_with_literal(&mut self, token_type: TokenType, literal: Literal) {

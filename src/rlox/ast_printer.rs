@@ -1,4 +1,7 @@
-use super::{expr::{Expression, Visitor}, error::LoxError};
+use super::{
+    error::LoxError,
+    expr::{Expression, Visitor},
+};
 
 pub struct AstPrinter;
 
@@ -31,22 +34,34 @@ impl AstPrinter {
 
 #[allow(unused)]
 impl Visitor<String, LoxError> for AstPrinter {
-    fn visit_assign_expression(&self, assign_expression: &super::expr::AssignExpression) -> Result<String, LoxError> {
+    fn visit_assign_expression(
+        &self,
+        assign_expression: &super::expr::AssignExpression,
+    ) -> Result<String, LoxError> {
         todo!()
     }
 
-    fn visit_binary_expression(&self, binary_expression: &super::expr::BinaryExpression) -> Result<String, LoxError> {
+    fn visit_binary_expression(
+        &self,
+        binary_expression: &super::expr::BinaryExpression,
+    ) -> Result<String, LoxError> {
         return self.parenthesize(
             binary_expression.op.lexeme.as_str(),
             vec![&binary_expression.left, &binary_expression.right],
         );
     }
 
-    fn visit_call_expression(&self, call_expression: &super::expr::CallExpression) -> Result<String, LoxError> {
+    fn visit_call_expression(
+        &self,
+        call_expression: &super::expr::CallExpression,
+    ) -> Result<String, LoxError> {
         todo!()
     }
 
-    fn visit_get_expression(&self, get_expression: &super::expr::GetExpression) -> Result<String, LoxError> {
+    fn visit_get_expression(
+        &self,
+        get_expression: &super::expr::GetExpression,
+    ) -> Result<String, LoxError> {
         todo!()
     }
 
@@ -76,15 +91,24 @@ impl Visitor<String, LoxError> for AstPrinter {
         todo!()
     }
 
-    fn visit_set_expression(&self, set_expression: &super::expr::SetExpression) -> Result<String, LoxError> {
+    fn visit_set_expression(
+        &self,
+        set_expression: &super::expr::SetExpression,
+    ) -> Result<String, LoxError> {
         todo!()
     }
 
-    fn visit_super_expression(&self, super_expression: &super::expr::SuperExpression) -> Result<String, LoxError> {
+    fn visit_super_expression(
+        &self,
+        super_expression: &super::expr::SuperExpression,
+    ) -> Result<String, LoxError> {
         todo!()
     }
 
-    fn visit_this_expression(&self, this_expression: &super::expr::ThisExpression) -> Result<String, LoxError> {
+    fn visit_this_expression(
+        &self,
+        this_expression: &super::expr::ThisExpression,
+    ) -> Result<String, LoxError> {
         todo!()
     }
 
@@ -102,7 +126,10 @@ impl Visitor<String, LoxError> for AstPrinter {
         )
     }
 
-    fn visit_unary_expression(&self, unary_expression: &super::expr::UnaryExpression) -> Result<String, LoxError> {
+    fn visit_unary_expression(
+        &self,
+        unary_expression: &super::expr::UnaryExpression,
+    ) -> Result<String, LoxError> {
         self.parenthesize(
             unary_expression.op.lexeme.as_str(),
             vec![&unary_expression.right],

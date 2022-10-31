@@ -31,7 +31,7 @@ pub struct Lox {
 impl Lox {
     pub fn new() -> Self {
         Self {
-            interpreter: Interpreter
+            interpreter: Interpreter,
         }
     }
 
@@ -77,38 +77,37 @@ impl Lox {
         let mut parser = Parser::new(scanner.tokens);
 
         match parser.parse() {
-            Ok(expression) => {
-                match self.interpreter.interpreter(expression) {
-                    Ok(value) => println!("{}", value),
-                    Err(err) => Self::error(err),
-                }
+            Ok(expression) => match self.interpreter.interpreter(expression) {
+                Ok(value) => println!("{}", value),
+                Err(err) => Self::error(err),
             },
             Err(err) => Self::error(err),
         }
 
-        if is_error() {
-            return;
-        }
+        // if is_error() {
+        //     return;
+        // }
     }
 
     pub fn error(error: LoxError) {
         match error {
-            LoxError::ParseError { line, lexeme, msg, token_type } => {
+            LoxError::ParseError {
+                line,
+                lexeme,
+                msg,
+                token_type,
+            } => {
                 if token_type == TokenType::Eof {
                     Self::report(line, "at end", msg.as_str())
                 } else {
                     Self::report(line, format!("at `{}`", lexeme).as_str(), msg.as_str())
                 }
-            },
+            }
             LoxError::RuntimeError { line, lexeme, msg } => {
                 Self::report(line, format!("at `{}`", lexeme).as_str(), msg.as_str())
-            },
-            LoxError::IoError { msg } => {
-                Self::report(0, "", msg.as_str())
-            },
-            LoxError::ParseTokenError { line, msg } => {
-                Self::report(line, "", msg)
-            },
+            }
+            LoxError::IoError { msg } => Self::report(0, "", msg.as_str()),
+            LoxError::ParseTokenError { line, msg } => Self::report(line, "", msg),
         }
     }
 
@@ -119,12 +118,10 @@ impl Lox {
             } else {
                 println!("[line] LoxError: {msg}");
             }
+        } else if line != 0 {
+            println!("[line {line}] LoxError {err_pos}: {msg}");
         } else {
-            if line != 0 {
-                println!("[line {line}] LoxError {err_pos}: {msg}");
-            } else {
-                println!("[line] LoxError {err_pos}: {msg}");
-            }
+            println!("[line] LoxError {err_pos}: {msg}");
         }
         had_error()
     }

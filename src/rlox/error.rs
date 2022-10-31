@@ -3,6 +3,7 @@ use std::io;
 use super::{token::Token, token_type::TokenType};
 
 #[derive(Debug)]
+#[allow(clippy::enum_variant_names)]
 pub enum LoxError {
     IoError {
         msg: String,

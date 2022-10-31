@@ -9,7 +9,7 @@ macro_rules! expr {
                 pub struct $name {
                     $(pub $attr: $attr_type), *
                 }
-                
+
                 #[allow(dead_code)]
                 impl $name {
                     pub fn new($($attr: $attr_type), *) -> Self {
@@ -22,6 +22,7 @@ macro_rules! expr {
 
             #[derive(Debug)]
             #[allow(dead_code)]
+            #[allow(clippy::enum_variant_names)]
             pub enum Expression {
                 $($name($name)), *
             }
@@ -40,7 +41,7 @@ macro_rules! expr {
                             Self::$name(expr) => visitor.[<visit_ $name: snake>](expr),
                         ) *
                     }
-                } 
+                }
             }
 
             pub trait Visitor<T, E> {
