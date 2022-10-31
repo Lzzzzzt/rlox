@@ -3,7 +3,7 @@ use std::fmt::{Display, Formatter};
 
 use lazy_static::lazy_static;
 
-use crate::lib::token_type::TokenType;
+use super::token_type::TokenType;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Literal {

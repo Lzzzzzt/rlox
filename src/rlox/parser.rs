@@ -1,8 +1,8 @@
-use crate::lib::error::LoxError;
-use crate::lib::error::LoxError::ParseError;
-use crate::lib::expr::Expression;
-use crate::lib::token::{Literal, Token};
-use crate::lib::token_type::TokenType;
+use super::error::LoxError;
+use super::error::LoxError::ParseError;
+use super::expr::Expression;
+use super::token::{Literal, Token};
+use super::token_type::TokenType;
 
 pub struct Parser {
     tokens: Vec<Token>,

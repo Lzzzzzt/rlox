@@ -1,5 +1,5 @@
-use crate::lib::token::{KEYWORD_MAP, Literal, Token};
-use crate::lib::token_type::TokenType;
+use crate::rlox::token::{KEYWORD_MAP, Literal, Token};
+use crate::rlox::token_type::TokenType;
 
 use super::error::LoxError;
 

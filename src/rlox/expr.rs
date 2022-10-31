@@ -1,4 +1,4 @@
-use crate::lib::token::{Literal, Token};
+use super::token::{Literal, Token};
 use paste::paste;
 macro_rules! expr {
     ($($name: ident { $($attr: ident: $attr_type: ty), * }),* $(,)?) => {

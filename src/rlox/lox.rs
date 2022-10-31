@@ -2,9 +2,9 @@ use std::fs::read_to_string;
 use std::io::{stdout, Write};
 use std::path::PathBuf;
 
-use crate::lib::parser::Parser;
-use crate::lib::scanner::Scanner;
-use crate::lib::token_type::TokenType;
+use super::parser::Parser;
+use super::scanner::Scanner;
+use super::token_type::TokenType;
 
 use super::error::LoxError;
 // use super::ast_printer::AstPrinter;
@@ -50,7 +50,7 @@ impl Lox {
         let stdin = std::io::stdin();
 
         loop {
-            print!("> ");
+            print!(">>> ");
             stdout().flush()?;
 
             let mut line = String::new();

@@ -2,6 +2,7 @@ use super::{expr::{Expression, Visitor}, error::LoxError};
 
 pub struct AstPrinter;
 
+#[allow(unused)]
 impl AstPrinter {
     pub fn new() -> Self {
         Self
