@@ -3,7 +3,7 @@ use std::vec;
 use super::error::LoxError;
 use super::error::LoxError::ParseError;
 use super::expr::Expression;
-use super::stmt::Statement;
+use super::stmt::{self, Statement};
 use super::token::{Literal, Token};
 use super::token_type::TokenType;
 
@@ -46,17 +46,23 @@ impl Parser {
     }
 
     fn var_declaration(&mut self) -> Result<Statement, LoxError> {
-        let name = self.consume(TokenType::Identifier, "Expect a variable name")?;
+        let mut vars = vec![];
 
-        let mut initializer = None;
-
-        if self.matched(vec![TokenType::Equal]) {
-            initializer = Some(self.expression()?)
+        while !self.is_at_end() && !self.check(TokenType::Semicolon) {
+            let name = self.consume(TokenType::Identifier, "Expect a variable name")?;
+            let mut initializer = None;
+            if self.matched(vec![TokenType::Equal]) {
+                initializer = Some(self.ternary()?)
+            }
+            vars.push(stmt::VarStatement::new(name, initializer));
+            if !self.check(TokenType::Semicolon) {
+                self.consume(TokenType::Comma, "Expect ',' after value")?;
+            }
         }
 
         self.consume(TokenType::Semicolon, "Expect ';' after value")?;
 
-        Ok(Statement::create_var_statement(name, initializer))
+        Ok(Statement::create_multi_var_statement(vars))
     }
 
     fn statement(&mut self) -> Result<Statement, LoxError> {

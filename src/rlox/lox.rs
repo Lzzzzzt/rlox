@@ -1,3 +1,4 @@
+use std::env;
 use std::fs::read_to_string;
 use std::io::{stdout, Write};
 use std::path::PathBuf;
@@ -48,6 +49,8 @@ impl Lox {
 
     pub fn run_prompt(mut self) -> Result<(), LoxError> {
         let stdin = std::io::stdin();
+
+        env::set_var("RLOX_RUN_MODE", "P");
 
         loop {
             print!(">>> ");

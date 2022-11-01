@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, env, rc::Rc};
 
 use super::{
     environment::Environment,
@@ -291,7 +291,12 @@ impl StmtVisitor<(), LoxError> for Interpreter {
         &mut self,
         expression_statement: &super::stmt::ExpressionStatement,
     ) -> Result<(), LoxError> {
-        self.evaluate(&expression_statement.expression)?;
+        if env::var("RLOX_RUN_MODE").is_err() {
+            self.evaluate(&expression_statement.expression)?;
+        } else {
+            println!("{}", self.evaluate(&expression_statement.expression)?);
+        }
+
         Ok(())
     }
 
@@ -330,5 +335,15 @@ impl StmtVisitor<(), LoxError> for Interpreter {
             &block_statement.statements,
             Environment::new(Some(self.env.clone())),
         )
+    }
+
+    fn visit_multi_var_statement(
+        &mut self,
+        multi_var_statement: &super::stmt::MultiVarStatement,
+    ) -> Result<(), LoxError> {
+        for var in &multi_var_statement.vars {
+            self.visit_var_statement(var)?;
+        }
+        Ok(())
     }
 }

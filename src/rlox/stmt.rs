@@ -57,5 +57,6 @@ stmt! {
     ExpressionStatement { expression: Expression },
     PrintStatement { expression: Expression },
     VarStatement { name: Token, initializer: Option<Expression> },
+    MultiVarStatement { vars: Vec<VarStatement> },
     BlockStatement { statements: Vec<Statement> },
 }
