@@ -1,6 +1,6 @@
-use super::token::{Literal, Token};
+use super::{expr::Expression, token::Token};
 use paste::paste;
-macro_rules! expr {
+macro_rules! stmt {
     ($($name: ident { $($attr: ident: $attr_type: ty), * }),* $(,)?) => {
         paste! {
             $(
@@ -23,22 +23,22 @@ macro_rules! expr {
             #[derive(Debug)]
             #[allow(dead_code)]
             #[allow(clippy::enum_variant_names)]
-            pub enum Expression {
+            pub enum Statement {
                 $($name($name)), *
             }
 
             #[allow(dead_code)]
-            impl Expression {
+            impl Statement {
                 $(
-                    pub fn [<create_ $name: snake>]($($attr: $attr_type), *) -> Expression {
-                        Expression::$name ($name {$($attr), *})
+                    pub fn [<create_ $name: snake>]($($attr: $attr_type), *) -> Self {
+                        Self::$name ($name {$($attr), *})
                     }
                 ) *
 
                 pub fn accept<T, E>(&self, visitor: &mut impl Visitor<T, E>) -> Result<T, E> {
                     match self {
                         $(
-                            Self::$name(expr) => visitor.[<visit_ $name: snake>](expr),
+                            Self::$name(stmt) => visitor.[<visit_ $name: snake>](stmt),
                         ) *
                     }
                 }
@@ -53,18 +53,9 @@ macro_rules! expr {
     };
 }
 
-expr! {
-    AssignExpression { name: Token, value: Box<Expression> },
-    BinaryExpression { left: Box<Expression>, op: Token, right: Box<Expression> },
-    CallExpression { callee: Box<Expression>, paren: Token, argument: Vec<Expression> },
-    GetExpression { object: Box<Expression>, name: Token },
-    GroupingExpression { expression: Box<Expression> },
-    LiteralExpression { value: Literal },
-    LogicalExpression { left: Box<Expression>, op: Token, right: Box<Expression> },
-    SetExpression { object: Box<Expression>, name: Token, value: Box<Expression> },
-    SuperExpression { keyword: Token, method: Token },
-    ThisExpression { keyword: Token },
-    TernaryExpression { cmp: Box<Expression>, true_value: Box<Expression>, false_value: Box<Expression> },
-    UnaryExpression { op: Token, right: Box<Expression> },
-    VariableExpression { name: Token },
+stmt! {
+    ExpressionStatement { expression: Expression },
+    PrintStatement { expression: Expression },
+    VarStatement { name: Token, initializer: Option<Expression> },
+    BlockStatement { statements: Vec<Statement> },
 }

@@ -31,11 +31,11 @@ pub struct Lox {
 impl Lox {
     pub fn new() -> Self {
         Self {
-            interpreter: Interpreter,
+            interpreter: Interpreter::new(),
         }
     }
 
-    pub fn run_file(self, path: PathBuf) -> Result<(), LoxError> {
+    pub fn run_file(mut self, path: PathBuf) -> Result<(), LoxError> {
         let string = read_to_string(path)?;
         self.run(string);
 
@@ -46,7 +46,7 @@ impl Lox {
         Ok(())
     }
 
-    pub fn run_prompt(self) -> Result<(), LoxError> {
+    pub fn run_prompt(mut self) -> Result<(), LoxError> {
         let stdin = std::io::stdin();
 
         loop {
@@ -65,7 +65,7 @@ impl Lox {
         Ok(())
     }
 
-    fn run(&self, source: String) {
+    fn run(&mut self, source: String) {
         let mut scanner = Scanner::new(source);
 
         if let Err(err) = scanner.scan_tokens() {
@@ -77,8 +77,8 @@ impl Lox {
         let mut parser = Parser::new(scanner.tokens);
 
         match parser.parse() {
-            Ok(expression) => match self.interpreter.interpreter(expression) {
-                Ok(value) => println!("{}", value),
+            Ok(expression) => match self.interpreter.interpret(expression) {
+                Ok(value) => value,
                 Err(err) => Self::error(err),
             },
             Err(err) => Self::error(err),

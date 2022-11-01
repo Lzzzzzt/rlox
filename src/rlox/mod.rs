@@ -1,6 +1,8 @@
 pub mod ast_printer;
 mod error;
 mod expr;
+mod stmt;
+mod environment;
 mod interpreter;
 pub mod lox;
 mod parser;
