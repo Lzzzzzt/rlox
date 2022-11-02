@@ -1,5 +1,5 @@
 use super::{
-    error::LoxError,
+    error::{LoxError, Result},
     expr::{Expression, Visitor},
 };
 
@@ -15,7 +15,7 @@ impl AstPrinter {
         expr.accept(self).unwrap()
     }
 
-    fn parenthesize(&mut self, name: &str, exprs: Vec<&Expression>) -> Result<String, LoxError> {
+    fn parenthesize(&mut self, name: &str, exprs: Vec<&Expression>) -> Result<String> {
         let mut string = String::new();
 
         string.push('(');
@@ -37,14 +37,14 @@ impl Visitor<String, LoxError> for AstPrinter {
     fn visit_assign_expression(
         &mut self,
         assign_expression: &super::expr::AssignExpression,
-    ) -> Result<String, LoxError> {
+    ) -> Result<String> {
         todo!()
     }
 
     fn visit_binary_expression(
         &mut self,
         binary_expression: &super::expr::BinaryExpression,
-    ) -> Result<String, LoxError> {
+    ) -> Result<String> {
         return self.parenthesize(
             binary_expression.op.lexeme.as_str(),
             vec![&binary_expression.left, &binary_expression.right],
@@ -54,28 +54,28 @@ impl Visitor<String, LoxError> for AstPrinter {
     fn visit_call_expression(
         &mut self,
         call_expression: &super::expr::CallExpression,
-    ) -> Result<String, LoxError> {
+    ) -> Result<String> {
         todo!()
     }
 
     fn visit_get_expression(
         &mut self,
         get_expression: &super::expr::GetExpression,
-    ) -> Result<String, LoxError> {
+    ) -> Result<String> {
         todo!()
     }
 
     fn visit_grouping_expression(
         &mut self,
         grouping_expression: &super::expr::GroupingExpression,
-    ) -> Result<String, LoxError> {
+    ) -> Result<String> {
         self.parenthesize("group", vec![&grouping_expression.expression])
     }
 
     fn visit_literal_expression(
         &mut self,
         literal_expression: &super::expr::LiteralExpression,
-    ) -> Result<String, LoxError> {
+    ) -> Result<String> {
         match &literal_expression.value {
             super::token::Literal::String(string) => Ok(string.into()),
             super::token::Literal::Number(number) => Ok(format!("{}", number)),
@@ -87,35 +87,35 @@ impl Visitor<String, LoxError> for AstPrinter {
     fn visit_logical_expression(
         &mut self,
         logical_expression: &super::expr::LogicalExpression,
-    ) -> Result<String, LoxError> {
+    ) -> Result<String> {
         todo!()
     }
 
     fn visit_set_expression(
         &mut self,
         set_expression: &super::expr::SetExpression,
-    ) -> Result<String, LoxError> {
+    ) -> Result<String> {
         todo!()
     }
 
     fn visit_super_expression(
         &mut self,
         super_expression: &super::expr::SuperExpression,
-    ) -> Result<String, LoxError> {
+    ) -> Result<String> {
         todo!()
     }
 
     fn visit_this_expression(
         &mut self,
         this_expression: &super::expr::ThisExpression,
-    ) -> Result<String, LoxError> {
+    ) -> Result<String> {
         todo!()
     }
 
     fn visit_ternary_expression(
         &mut self,
         ternary_expression: &super::expr::TernaryExpression,
-    ) -> Result<String, LoxError> {
+    ) -> Result<String> {
         self.parenthesize(
             "ternary",
             vec![
@@ -129,7 +129,7 @@ impl Visitor<String, LoxError> for AstPrinter {
     fn visit_unary_expression(
         &mut self,
         unary_expression: &super::expr::UnaryExpression,
-    ) -> Result<String, LoxError> {
+    ) -> Result<String> {
         self.parenthesize(
             unary_expression.op.lexeme.as_str(),
             vec![&unary_expression.right],
@@ -139,7 +139,7 @@ impl Visitor<String, LoxError> for AstPrinter {
     fn visit_variable_expression(
         &mut self,
         variable_expression: &super::expr::VariableExpression,
-    ) -> Result<String, LoxError> {
+    ) -> Result<String> {
         todo!()
     }
 }

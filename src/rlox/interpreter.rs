@@ -2,7 +2,7 @@ use std::{cell::RefCell, env, rc::Rc};
 
 use super::{
     environment::Environment,
-    error::LoxError,
+    error::{LoxError, Result},
     expr::{Expression, Visitor as ExprVisitor},
     stmt::{Statement, Visitor as StmtVisitor},
     token::{Literal, Token},
@@ -20,7 +20,7 @@ impl Interpreter {
         }
     }
 
-    pub fn interpret(&mut self, statements: Vec<Statement>) -> Result<(), LoxError> {
+    pub fn interpret(&mut self, statements: Vec<Statement>) -> Result<()> {
         for stmt in &statements {
             self.execute(stmt)?;
         }
@@ -28,15 +28,15 @@ impl Interpreter {
         Ok(())
     }
 
-    fn evaluate(&mut self, expr: &Expression) -> Result<Literal, LoxError> {
+    fn evaluate(&mut self, expr: &Expression) -> Result<Literal> {
         expr.accept(self)
     }
 
-    fn execute(&mut self, stmt: &Statement) -> Result<(), LoxError> {
+    fn execute(&mut self, stmt: &Statement) -> Result<()> {
         stmt.accept(self)
     }
 
-    fn get_num(&self, obj: &Literal, op: &Token) -> Result<f64, LoxError> {
+    fn get_num(&self, obj: &Literal, op: &Token) -> Result<f64> {
         if let Literal::Number(num) = obj {
             return Ok(*num);
         }
@@ -47,7 +47,7 @@ impl Interpreter {
         ))
     }
 
-    fn get_string(&self, obj: &Literal, op: &Token) -> Result<String, LoxError> {
+    fn get_string(&self, obj: &Literal, op: &Token) -> Result<String> {
         if let Literal::String(string) = obj {
             return Ok(string.clone());
         }
@@ -58,7 +58,7 @@ impl Interpreter {
         ))
     }
 
-    fn get_bool(&self, obj: &Literal) -> Result<bool, LoxError> {
+    fn get_bool(&self, obj: &Literal) -> Result<bool> {
         if let Literal::Bool(b) = obj {
             return Ok(*b);
         }
@@ -70,10 +70,10 @@ impl Interpreter {
         })
     }
 
-    fn is_true(&self, obj: Literal) -> bool {
+    fn is_true(&self, obj: &Literal) -> bool {
         match obj {
             Literal::String(_) | Literal::Number(_) => true,
-            Literal::Bool(b) => b,
+            Literal::Bool(b) => *b,
             Literal::Nil => false,
         }
     }
@@ -82,7 +82,7 @@ impl Interpreter {
         &mut self,
         statements: &[Statement],
         env: Environment,
-    ) -> Result<(), LoxError> {
+    ) -> Result<()> {
         let pre = self.env.clone();
 
         self.env = Rc::new(RefCell::new(env));
@@ -104,7 +104,7 @@ impl ExprVisitor<Literal, LoxError> for Interpreter {
     fn visit_assign_expression(
         &mut self,
         assign_expression: &super::expr::AssignExpression,
-    ) -> Result<Literal, LoxError> {
+    ) -> Result<Literal> {
         let value = self.evaluate(&assign_expression.value)?;
         self.env
             .borrow_mut()
@@ -115,7 +115,7 @@ impl ExprVisitor<Literal, LoxError> for Interpreter {
     fn visit_binary_expression(
         &mut self,
         binary_expression: &super::expr::BinaryExpression,
-    ) -> Result<Literal, LoxError> {
+    ) -> Result<Literal> {
         let left = self.evaluate(&binary_expression.left)?;
         let right = self.evaluate(&binary_expression.right)?;
         let op = &binary_expression.op;
@@ -193,63 +193,69 @@ impl ExprVisitor<Literal, LoxError> for Interpreter {
     fn visit_call_expression(
         &mut self,
         call_expression: &super::expr::CallExpression,
-    ) -> Result<Literal, LoxError> {
+    ) -> Result<Literal> {
         todo!()
     }
 
     fn visit_get_expression(
         &mut self,
         get_expression: &super::expr::GetExpression,
-    ) -> Result<Literal, LoxError> {
+    ) -> Result<Literal> {
         todo!()
     }
 
     fn visit_grouping_expression(
         &mut self,
         grouping_expression: &super::expr::GroupingExpression,
-    ) -> Result<Literal, LoxError> {
+    ) -> Result<Literal> {
         self.evaluate(&grouping_expression.expression)
     }
 
     fn visit_literal_expression(
         &mut self,
         literal_expression: &super::expr::LiteralExpression,
-    ) -> Result<Literal, LoxError> {
+    ) -> Result<Literal> {
         Ok(literal_expression.value.clone())
     }
 
     fn visit_logical_expression(
         &mut self,
         logical_expression: &super::expr::LogicalExpression,
-    ) -> Result<Literal, LoxError> {
-        todo!()
+    ) -> Result<Literal> {
+        let left = self.evaluate(&logical_expression.left)?;
+
+        if logical_expression.op.token_type == TokenType::Or && self.is_true(&left) {
+            return Ok(left);
+        }
+
+        self.evaluate(&logical_expression.right)
     }
 
     fn visit_set_expression(
         &mut self,
         set_expression: &super::expr::SetExpression,
-    ) -> Result<Literal, LoxError> {
+    ) -> Result<Literal> {
         todo!()
     }
 
     fn visit_super_expression(
         &mut self,
         super_expression: &super::expr::SuperExpression,
-    ) -> Result<Literal, LoxError> {
+    ) -> Result<Literal> {
         todo!()
     }
 
     fn visit_this_expression(
         &mut self,
         this_expression: &super::expr::ThisExpression,
-    ) -> Result<Literal, LoxError> {
+    ) -> Result<Literal> {
         todo!()
     }
 
     fn visit_ternary_expression(
         &mut self,
         ternary_expression: &super::expr::TernaryExpression,
-    ) -> Result<Literal, LoxError> {
+    ) -> Result<Literal> {
         let value = &self.evaluate(&ternary_expression.cmp)?;
         let cmp = self.get_bool(value)?;
 
@@ -263,14 +269,14 @@ impl ExprVisitor<Literal, LoxError> for Interpreter {
     fn visit_unary_expression(
         &mut self,
         unary_expression: &super::expr::UnaryExpression,
-    ) -> Result<Literal, LoxError> {
+    ) -> Result<Literal> {
         let right = self.evaluate(&unary_expression.right)?;
         let op = &unary_expression.op;
 
         match op.token_type {
             TokenType::Plus => Ok(Literal::Number(self.get_num(&right, op)?.abs())),
             TokenType::Minus => Ok(Literal::Number(-self.get_num(&right, op)?)),
-            TokenType::Bang => Ok(Literal::Bool(!self.is_true(right))),
+            TokenType::Bang => Ok(Literal::Bool(!self.is_true(&right))),
             _ => Err(LoxError::create_runtime_error(
                 &unary_expression.op,
                 "Operand must be number or bool".into(),
@@ -281,7 +287,7 @@ impl ExprVisitor<Literal, LoxError> for Interpreter {
     fn visit_variable_expression(
         &mut self,
         variable_expression: &super::expr::VariableExpression,
-    ) -> Result<Literal, LoxError> {
+    ) -> Result<Literal> {
         self.env.borrow_mut().get(&variable_expression.name)
     }
 }
@@ -290,7 +296,7 @@ impl StmtVisitor<(), LoxError> for Interpreter {
     fn visit_expression_statement(
         &mut self,
         expression_statement: &super::stmt::ExpressionStatement,
-    ) -> Result<(), LoxError> {
+    ) -> Result<()> {
         if env::var("RLOX_RUN_MODE").is_err() {
             self.evaluate(&expression_statement.expression)?;
         } else {
@@ -303,16 +309,13 @@ impl StmtVisitor<(), LoxError> for Interpreter {
     fn visit_print_statement(
         &mut self,
         print_statement: &super::stmt::PrintStatement,
-    ) -> Result<(), LoxError> {
+    ) -> Result<()> {
         let value = self.evaluate(&print_statement.expression)?;
         println!("{}", value);
         Ok(())
     }
 
-    fn visit_var_statement(
-        &mut self,
-        var_statement: &super::stmt::VarStatement,
-    ) -> Result<(), LoxError> {
+    fn visit_var_statement(&mut self, var_statement: &super::stmt::VarStatement) -> Result<()> {
         if var_statement.initializer.is_some() {
             let value = self.evaluate(var_statement.initializer.as_ref().unwrap())?;
             self.env
@@ -330,7 +333,7 @@ impl StmtVisitor<(), LoxError> for Interpreter {
     fn visit_block_statement(
         &mut self,
         block_statement: &super::stmt::BlockStatement,
-    ) -> Result<(), LoxError> {
+    ) -> Result<()> {
         self.execute_block_statement(
             &block_statement.statements,
             Environment::new(Some(self.env.clone())),
@@ -340,10 +343,69 @@ impl StmtVisitor<(), LoxError> for Interpreter {
     fn visit_multi_var_statement(
         &mut self,
         multi_var_statement: &super::stmt::MultiVarStatement,
-    ) -> Result<(), LoxError> {
+    ) -> Result<()> {
         for var in &multi_var_statement.vars {
             self.visit_var_statement(var)?;
         }
         Ok(())
+    }
+
+    fn visit_branch_statement(
+        &mut self,
+        branch_statement: &super::stmt::BranchStatement,
+    ) -> Result<()> {
+        let condition = self.evaluate(&branch_statement.condition)?;
+        if self.is_true(&condition) {
+            self.execute(&branch_statement.then_branch)?
+        } else if let Some(es) = branch_statement.else_branch.as_ref() {
+            self.execute(es)?
+        }
+
+        Ok(())
+    }
+
+    fn visit_while_statement(
+        &mut self,
+        while_statement: &super::stmt::WhileStatement,
+    ) -> Result<()> {
+        let mut condition = self.evaluate(&while_statement.condition)?;
+
+        while self.is_true(&condition) {
+            if let Err(e) = self.execute(&while_statement.body) {
+                match e {
+                    LoxError::Break { .. } => break,
+                    LoxError::Continue { .. } => {
+                        if let Some(incr) = &while_statement.increment {
+                            self.execute(incr)?;
+                        }
+                        continue;
+                    }
+                    _ => return Err(e),
+                };
+            }
+            condition = self.evaluate(&while_statement.condition)?;
+        }
+
+        Ok(())
+    }
+
+    fn visit_continue_statement(
+        &mut self,
+        continue_statement: &super::stmt::ContinueStatement,
+    ) -> Result<()> {
+        Err(LoxError::create_continue(
+            &continue_statement.token,
+            "'continue' must be in 'for' or 'while' statement".into(),
+        ))
+    }
+
+    fn visit_break_statement(
+        &mut self,
+        break_statement: &super::stmt::BreakStatement,
+    ) -> Result<()> {
+        Err(LoxError::create_break(
+            &break_statement.token,
+            "'break' must be in 'for' or 'while' statement".into(),
+        ))
     }
 }

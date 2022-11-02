@@ -4,7 +4,7 @@ macro_rules! stmt {
     ($($name: ident { $($attr: ident: $attr_type: ty), * }),* $(,)?) => {
         paste! {
             $(
-                #[derive(Debug)]
+                #[derive(Debug, Clone)]
                 #[allow(dead_code)]
                 pub struct $name {
                     $(pub $attr: $attr_type), *
@@ -20,7 +20,7 @@ macro_rules! stmt {
                 }
             ) *
 
-            #[derive(Debug)]
+            #[derive(Debug, Clone)]
             #[allow(dead_code)]
             #[allow(clippy::enum_variant_names)]
             pub enum Statement {
@@ -59,4 +59,8 @@ stmt! {
     VarStatement { name: Token, initializer: Option<Expression> },
     MultiVarStatement { vars: Vec<VarStatement> },
     BlockStatement { statements: Vec<Statement> },
+    BranchStatement { condition: Expression, then_branch: Box<Statement>, else_branch: Option<Box<Statement>> },
+    WhileStatement { condition: Expression, body: Box<Statement>, increment: Option<Box<Statement>> },
+    ContinueStatement { token: Token },
+    BreakStatement { token: Token },
 }

@@ -4,7 +4,7 @@ macro_rules! expr {
     ($($name: ident { $($attr: ident: $attr_type: ty), * }),* $(,)?) => {
         paste! {
             $(
-                #[derive(Debug)]
+                #[derive(Debug, Clone)]
                 #[allow(dead_code)]
                 pub struct $name {
                     $(pub $attr: $attr_type), *
@@ -20,7 +20,7 @@ macro_rules! expr {
                 }
             ) *
 
-            #[derive(Debug)]
+            #[derive(Debug, Clone)]
             #[allow(dead_code)]
             #[allow(clippy::enum_variant_names)]
             pub enum Expression {

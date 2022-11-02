@@ -106,7 +106,9 @@ impl Lox {
                     Self::report(line, format!("at `{}`", lexeme).as_str(), msg.as_str())
                 }
             }
-            LoxError::RuntimeError { line, lexeme, msg } => {
+            LoxError::RuntimeError { line, lexeme, msg }
+            | LoxError::Break { line, lexeme, msg }
+            | LoxError::Continue { line, lexeme, msg } => {
                 Self::report(line, format!("at `{}`", lexeme).as_str(), msg.as_str())
             }
             LoxError::IoError { msg } => Self::report(0, "", msg.as_str()),

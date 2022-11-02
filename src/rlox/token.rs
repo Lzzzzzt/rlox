@@ -42,6 +42,8 @@ lazy_static! {
         ("true", TokenType::True),
         ("let", TokenType::Let),
         ("while", TokenType::While),
+        ("continue", TokenType::Continue),
+        ("break", TokenType::Break)
     ]);
 }
 

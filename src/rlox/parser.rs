@@ -1,7 +1,7 @@
 use std::vec;
 
-use super::error::LoxError;
 use super::error::LoxError::ParseError;
+use super::error::{LoxError, Result};
 use super::expr::Expression;
 use super::stmt::{self, Statement};
 use super::token::{Literal, Token};
@@ -17,7 +17,7 @@ impl Parser {
         Self { tokens, current: 0 }
     }
 
-    pub fn parse(&mut self) -> Result<Vec<Statement>, LoxError> {
+    pub fn parse(&mut self) -> Result<Vec<Statement>> {
         let mut statements = vec![];
 
         while !self.is_at_end() {
@@ -27,11 +27,11 @@ impl Parser {
         Ok(statements)
     }
 
-    fn expression(&mut self) -> Result<Expression, LoxError> {
+    fn expression(&mut self) -> Result<Expression> {
         self.assignment()
     }
 
-    fn declaration(&mut self) -> Result<Statement, LoxError> {
+    fn declaration(&mut self) -> Result<Statement> {
         if self.matched(vec![TokenType::Let]) {
             return self.var_declaration();
         }
@@ -45,7 +45,7 @@ impl Parser {
         }
     }
 
-    fn var_declaration(&mut self) -> Result<Statement, LoxError> {
+    fn var_declaration(&mut self) -> Result<Statement> {
         let mut vars = vec![];
 
         while !self.is_at_end() && !self.check(TokenType::Semicolon) {
@@ -65,9 +65,33 @@ impl Parser {
         Ok(Statement::create_multi_var_statement(vars))
     }
 
-    fn statement(&mut self) -> Result<Statement, LoxError> {
+    fn statement(&mut self) -> Result<Statement> {
+        if self.matched(vec![TokenType::For]) {
+            return self.for_statement();
+        }
+
+        if self.matched(vec![TokenType::If]) {
+            return self.branch_statement();
+        }
+
         if self.matched(vec![TokenType::Print]) {
             return self.print_statement();
+        }
+
+        if self.matched(vec![TokenType::While]) {
+            return self.while_statement();
+        }
+
+        if self.matched(vec![TokenType::Break]) {
+            let token = self.previous();
+            self.consume(TokenType::Semicolon, "Expect ';' after 'break'")?;
+            return Ok(Statement::create_break_statement(token));
+        }
+
+        if self.matched(vec![TokenType::Continue]) {
+            let token = self.previous();
+            self.consume(TokenType::Semicolon, "Expect ';' after 'continue'")?;
+            return Ok(Statement::create_continue_statement(token));
         }
 
         if self.matched(vec![TokenType::LeftBrace]) {
@@ -77,7 +101,86 @@ impl Parser {
         self.expression_statement()
     }
 
-    fn block_statement(&mut self) -> Result<Vec<Statement>, LoxError> {
+    fn for_statement(&mut self) -> Result<Statement> {
+        self.consume(TokenType::LeftParen, "Expect '(' after 'for'")?;
+
+        let initializer = if self.check(TokenType::Let) {
+            self.advance();
+            Some(self.var_declaration()?)
+        } else if self.check(TokenType::Semicolon) {
+            self.advance();
+            None
+        } else {
+            Some(self.expression_statement()?)
+        };
+
+        let condition = if self.check(TokenType::Semicolon) {
+            None
+        } else {
+            Some(self.expression()?)
+        };
+
+        self.consume(TokenType::Semicolon, "Expect ';' after loop condition")?;
+
+        let increment = if self.check(TokenType::RightParen) {
+            None
+        } else {
+            Some(Statement::create_expression_statement(self.expression()?))
+        };
+
+        self.consume(TokenType::RightParen, "Expect ')' after 'for'")?;
+
+        let mut body = self.statement()?;
+
+        let mut incr = None;
+
+        if let Some(inc) = increment {
+            body = Statement::create_block_statement(vec![body, inc.clone()]);
+            incr = Some(Box::new(inc))
+        }
+
+        body = Statement::create_while_statement(
+            condition.unwrap_or_else(|| Expression::create_literal_expression(Literal::Bool(true))),
+            Box::new(body),
+            incr
+        );
+
+        if let Some(init) = initializer {
+            body = Statement::create_block_statement(vec![init, body]);
+        }
+
+        Ok(body)
+    }
+
+    fn while_statement(&mut self) -> Result<Statement> {
+        self.consume(TokenType::LeftParen, "Expect '(' after 'if'")?;
+        let condition = self.expression()?;
+        self.consume(TokenType::RightParen, "Expect ')' after the condition")?;
+        let body = self.statement()?;
+
+        Ok(Statement::create_while_statement(condition, Box::new(body), None))
+    }
+
+    fn branch_statement(&mut self) -> Result<Statement> {
+        self.consume(TokenType::LeftParen, "Expect '(' after 'if'")?;
+        let condition = self.expression()?;
+        self.consume(TokenType::RightParen, "Expect ')' after the condition")?;
+
+        let then_branch = self.statement()?;
+        let mut else_branch = None;
+
+        if self.matched(vec![TokenType::Else]) {
+            else_branch = Some(Box::new(self.statement()?));
+        }
+
+        Ok(Statement::create_branch_statement(
+            condition,
+            Box::new(then_branch),
+            else_branch,
+        ))
+    }
+
+    fn block_statement(&mut self) -> Result<Vec<Statement>> {
         let mut statements = vec![];
 
         while !self.check(TokenType::RightBrace) && !self.is_at_end() {
@@ -89,7 +192,7 @@ impl Parser {
         Ok(statements)
     }
 
-    fn print_statement(&mut self) -> Result<Statement, LoxError> {
+    fn print_statement(&mut self) -> Result<Statement> {
         let value = self.expression()?;
 
         self.consume(TokenType::Semicolon, "Expect ';' after value")?;
@@ -97,7 +200,7 @@ impl Parser {
         Ok(Statement::create_print_statement(value))
     }
 
-    fn expression_statement(&mut self) -> Result<Statement, LoxError> {
+    fn expression_statement(&mut self) -> Result<Statement> {
         let expr = self.expression()?;
 
         self.consume(TokenType::Semicolon, "Expect ';' after value")?;
@@ -105,8 +208,8 @@ impl Parser {
         Ok(Statement::create_expression_statement(expr))
     }
 
-    fn assignment(&mut self) -> Result<Expression, LoxError> {
-        let expr = self.comma()?;
+    fn assignment(&mut self) -> Result<Expression> {
+        let expr = self.or()?;
 
         if self.matched(vec![TokenType::Equal]) {
             let eq = self.previous();
@@ -126,7 +229,31 @@ impl Parser {
         Ok(expr)
     }
 
-    fn comma(&mut self) -> Result<Expression, LoxError> {
+    fn or(&mut self) -> Result<Expression> {
+        let mut expr = self.and()?;
+
+        while self.matched(vec![TokenType::Or]) && !self.is_at_end() {
+            let op = self.previous();
+            let right = self.and()?;
+            expr = Expression::create_logical_expression(Box::new(expr), op, Box::new(right));
+        }
+
+        Ok(expr)
+    }
+
+    fn and(&mut self) -> Result<Expression> {
+        let mut expr = self.comma()?;
+
+        while self.matched(vec![TokenType::And]) && !self.is_at_end() {
+            let op = self.previous();
+            let right = self.comma()?;
+            expr = Expression::create_logical_expression(Box::new(expr), op, Box::new(right));
+        }
+
+        Ok(expr)
+    }
+
+    fn comma(&mut self) -> Result<Expression> {
         let mut expr = self.ternary();
 
         while self.matched(vec![TokenType::Comma]) {
@@ -142,7 +269,7 @@ impl Parser {
         expr
     }
 
-    fn ternary(&mut self) -> Result<Expression, LoxError> {
+    fn ternary(&mut self) -> Result<Expression> {
         let cmp = self.equality();
 
         if self.matched(vec![TokenType::QuestionMark]) {
@@ -162,7 +289,7 @@ impl Parser {
         cmp
     }
 
-    fn equality(&mut self) -> Result<Expression, LoxError> {
+    fn equality(&mut self) -> Result<Expression> {
         let mut expr = self.comparison();
 
         while self.matched(vec![TokenType::BangEqual, TokenType::EqualEqual]) {
@@ -178,7 +305,7 @@ impl Parser {
         expr
     }
 
-    fn comparison(&mut self) -> Result<Expression, LoxError> {
+    fn comparison(&mut self) -> Result<Expression> {
         let mut expr = self.term();
 
         while self.matched(vec![
@@ -199,7 +326,7 @@ impl Parser {
         expr
     }
 
-    fn term(&mut self) -> Result<Expression, LoxError> {
+    fn term(&mut self) -> Result<Expression> {
         let mut expr = self.factor();
 
         while self.matched(vec![TokenType::Plus, TokenType::Minus]) {
@@ -215,7 +342,7 @@ impl Parser {
         expr
     }
 
-    fn factor(&mut self) -> Result<Expression, LoxError> {
+    fn factor(&mut self) -> Result<Expression> {
         let mut expr = self.unary();
 
         while self.matched(vec![TokenType::Star, TokenType::Slash]) {
@@ -231,7 +358,7 @@ impl Parser {
         expr
     }
 
-    fn unary(&mut self) -> Result<Expression, LoxError> {
+    fn unary(&mut self) -> Result<Expression> {
         if self.matched(vec![TokenType::Bang, TokenType::Minus, TokenType::Plus]) {
             let op = self.previous();
             let right = self.unary();
@@ -241,7 +368,7 @@ impl Parser {
         self.primary()
     }
 
-    fn primary(&mut self) -> Result<Expression, LoxError> {
+    fn primary(&mut self) -> Result<Expression> {
         if self.matched(vec![TokenType::False]) {
             Ok(Expression::create_literal_expression(Literal::Bool(false)))
         } else if self.matched(vec![TokenType::True]) {
@@ -287,7 +414,7 @@ impl Parser {
         false
     }
 
-    fn consume(&mut self, token_type: TokenType, msg: &str) -> Result<Token, LoxError> {
+    fn consume(&mut self, token_type: TokenType, msg: &str) -> Result<Token> {
         if self.check(token_type) {
             return Ok(self.advance());
         }
