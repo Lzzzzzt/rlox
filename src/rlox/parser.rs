@@ -17,11 +17,19 @@ impl Parser {
         Self { tokens, current: 0 }
     }
 
-    pub fn parse(&mut self) -> Result<Vec<Statement>> {
+    pub fn parse(&mut self) -> Result<Vec<Statement>, Vec<LoxError>> {
         let mut statements = vec![];
+        let mut errors = vec![];
 
         while !self.is_at_end() {
-            statements.push(self.declaration()?)
+            match self.declaration() {
+                Ok(stmt) => statements.push(stmt),
+                Err(e) => errors.push(e),
+            }
+        }
+
+        if !errors.is_empty() {
+            return Err(errors);
         }
 
         Ok(statements)
@@ -33,7 +41,13 @@ impl Parser {
 
     fn declaration(&mut self) -> Result<Statement> {
         if self.matched(vec![TokenType::Let]) {
-            return self.var_declaration();
+            return match self.var_declaration() {
+                Ok(stmt) => Ok(stmt),
+                Err(err) => {
+                    self.synchronize();
+                    Err(err)
+                }
+            };
         }
 
         match self.statement() {
@@ -142,7 +156,7 @@ impl Parser {
         body = Statement::create_while_statement(
             condition.unwrap_or_else(|| Expression::create_literal_expression(Literal::Bool(true))),
             Box::new(body),
-            incr
+            incr,
         );
 
         if let Some(init) = initializer {
@@ -158,7 +172,11 @@ impl Parser {
         self.consume(TokenType::RightParen, "Expect ')' after the condition")?;
         let body = self.statement()?;
 
-        Ok(Statement::create_while_statement(condition, Box::new(body), None))
+        Ok(Statement::create_while_statement(
+            condition,
+            Box::new(body),
+            None,
+        ))
     }
 
     fn branch_statement(&mut self) -> Result<Statement> {

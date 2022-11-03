@@ -8,7 +8,7 @@ use super::scanner::Scanner;
 use super::token_type::TokenType;
 
 use super::error::LoxError;
-// use super::ast_printer::AstPrinter;
+
 use super::interpreter::Interpreter;
 
 static mut HAD_ERROR: bool = false;
@@ -41,7 +41,7 @@ impl Lox {
         self.run(string);
 
         if is_error() {
-            panic!("Exit because error before!");
+            eprintln!("Exit because error before!");
         }
 
         Ok(())
@@ -75,7 +75,6 @@ impl Lox {
             Self::error(err);
             had_error();
         }
-        // println!("{:#?}", scanner.tokens);
 
         let mut parser = Parser::new(scanner.tokens);
 
@@ -84,12 +83,12 @@ impl Lox {
                 Ok(value) => value,
                 Err(err) => Self::error(err),
             },
-            Err(err) => Self::error(err),
+            Err(err) => {
+                for e in err {
+                    Self::error(e)
+                }
+            }
         }
-
-        // if is_error() {
-        //     return;
-        // }
     }
 
     pub fn error(error: LoxError) {

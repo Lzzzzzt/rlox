@@ -2,7 +2,7 @@ use std::{io, result};
 
 use super::{token::Token, token_type::TokenType};
 
-pub type Result<T> = result::Result<T, LoxError>;
+pub type Result<T, E=LoxError> = result::Result<T, E>;
 
 #[derive(Debug)]
 #[allow(clippy::enum_variant_names)]
