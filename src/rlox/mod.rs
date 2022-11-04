@@ -1,11 +1,13 @@
 pub mod ast_printer;
+mod callable;
+mod environment;
 mod error;
 mod expr;
-mod stmt;
-mod environment;
 mod interpreter;
 pub mod lox;
 mod parser;
+mod resolver;
 mod scanner;
+mod stmt;
 mod token;
-mod token_type;
+mod types;

@@ -63,4 +63,6 @@ stmt! {
     WhileStatement { condition: Expression, body: Box<Statement>, increment: Option<Box<Statement>> },
     ContinueStatement { token: Token },
     BreakStatement { token: Token },
+    FunctionStatement { name: Token, params: Vec<Token>, body: Vec<Statement> },
+    ReturnStatement { key_word: Token, value: Option<Expression> },
 }

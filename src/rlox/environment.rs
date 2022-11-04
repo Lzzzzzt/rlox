@@ -2,13 +2,14 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
 use super::{
     error::{LoxError, Result},
-    token::{Literal, Token},
+    token::Token,
+    types::Literal,
 };
 
 #[derive(Clone, Debug)]
 pub struct Environment {
     enclosing: Option<Rc<RefCell<Environment>>>,
-    values: HashMap<String, Literal>,
+    values: HashMap<Rc<String>, Literal>,
 }
 
 impl Environment {
@@ -19,7 +20,7 @@ impl Environment {
         }
     }
 
-    pub fn define(&mut self, name: String, value: Literal) {
+    pub fn define(&mut self, name: Rc<String>, value: Literal) {
         self.values.insert(name, value);
     }
 
@@ -40,13 +41,12 @@ impl Environment {
     }
 
     pub fn get(&self, name: &Token) -> Result<Literal> {
-        // println!("scope: {:#?}\n get: {:#?}\n env: {:#?}\n", self.enclosing, name, self.values);
         if self.values.contains_key(&name.lexeme) {
             return Ok(self.values.get(&name.lexeme).unwrap().clone());
         }
 
         if let Some(e) = &self.enclosing {
-            return Ok(e.borrow().get(name).unwrap());
+            return e.borrow().get(name)
         }
 
         Err(LoxError::create_runtime_error(

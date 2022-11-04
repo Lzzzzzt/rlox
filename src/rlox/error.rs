@@ -1,8 +1,11 @@
-use std::{io, result};
+use std::{io, result, rc::Rc};
 
-use super::{token::Token, token_type::TokenType};
+use super::{
+    token::Token,
+    types::{Literal, TokenType},
+};
 
-pub type Result<T, E=LoxError> = result::Result<T, E>;
+pub type Result<T, E = LoxError> = result::Result<T, E>;
 
 #[derive(Debug)]
 #[allow(clippy::enum_variant_names)]
@@ -16,24 +19,27 @@ pub enum LoxError {
     },
     ParseError {
         line: usize,
-        lexeme: String,
+        lexeme: Rc<String>,
         token_type: TokenType,
         msg: String,
     },
     RuntimeError {
         line: usize,
-        lexeme: String,
+        lexeme: Rc<String>,
         msg: String,
     },
     Break {
         line: usize,
-        lexeme: String,
+        lexeme: Rc<String>,
         msg: String,
     },
     Continue {
         line: usize,
-        lexeme: String,
+        lexeme: Rc<String>,
         msg: String,
+    },
+    Return {
+        value: Literal,
     },
 }
 
@@ -60,6 +66,10 @@ impl LoxError {
             lexeme: token.lexeme.clone(),
             msg,
         }
+    }
+
+    pub fn create_return(value: Literal) -> Self {
+        Self::Return { value }
     }
 }
 

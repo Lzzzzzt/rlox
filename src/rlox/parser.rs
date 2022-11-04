@@ -4,8 +4,9 @@ use super::error::LoxError::ParseError;
 use super::error::{LoxError, Result};
 use super::expr::Expression;
 use super::stmt::{self, Statement};
-use super::token::{Literal, Token};
-use super::token_type::TokenType;
+use super::token::Token;
+use super::types::TokenType;
+use super::types::{FuncType, Literal};
 
 pub struct Parser {
     tokens: Vec<Token>,
@@ -40,8 +41,17 @@ impl Parser {
     }
 
     fn declaration(&mut self) -> Result<Statement> {
-        if self.matched(vec![TokenType::Let]) {
+        if self.match_one(TokenType::Let) {
             return match self.var_declaration() {
+                Ok(stmt) => Ok(stmt),
+                Err(err) => {
+                    self.synchronize();
+                    Err(err)
+                }
+            };
+        }
+        if self.match_one(TokenType::Func) {
+            return match self.function(FuncType::Normal) {
                 Ok(stmt) => Ok(stmt),
                 Err(err) => {
                     self.synchronize();
@@ -59,13 +69,67 @@ impl Parser {
         }
     }
 
+    fn function_params_and_body(&mut self) -> Result<(Vec<Token>, Vec<Statement>)> {
+        let params = {
+            let mut params = vec![];
+
+            while !self.check(TokenType::RightParen) {
+                if params.len() > 256 {
+                    return Err(Self::error(
+                        self.peek(),
+                        "The maximum number of parameters is 256.",
+                    ));
+                }
+
+                params.push(self.consume(TokenType::Identifier, "Expect parameter name.")?);
+                if self.check(TokenType::Comma) {
+                    self.advance();
+                }
+            }
+
+            params
+        };
+
+        self.consume(TokenType::RightParen, "Expect ')' after parameters.")?;
+        self.consume(TokenType::LeftBrace, "Expect '{' before function body.")?;
+
+        let body = self.block_statement()?;
+
+        Ok((params, body))
+    }
+
+    fn function(&mut self, kind: FuncType) -> Result<Statement> {
+        if self.check(TokenType::LeftParen) {
+            self.consume(TokenType::LeftParen, "Expect '(' after func.")?;
+
+            let (params, body) = self.function_params_and_body()?;
+
+            let lambda = Expression::create_lambda_expression(params, body);
+
+            Ok(Statement::create_expression_statement(lambda))
+        } else {
+            let name = self.consume(
+                TokenType::Identifier,
+                format!("Expect {} name.", kind).as_str(),
+            )?;
+
+            self.consume(
+                TokenType::LeftParen,
+                format!("Expect '(' after {} name.", kind).as_str(),
+            )?;
+            let (params, body) = self.function_params_and_body()?;
+
+            Ok(Statement::create_function_statement(name, params, body))
+        }
+    }
+
     fn var_declaration(&mut self) -> Result<Statement> {
         let mut vars = vec![];
 
         while !self.is_at_end() && !self.check(TokenType::Semicolon) {
-            let name = self.consume(TokenType::Identifier, "Expect a variable name")?;
+            let name = self.consume(TokenType::Identifier, "Expect a variable name.")?;
             let mut initializer = None;
-            if self.matched(vec![TokenType::Equal]) {
+            if self.match_one(TokenType::Equal) {
                 initializer = Some(self.ternary()?)
             }
             vars.push(stmt::VarStatement::new(name, initializer));
@@ -80,39 +144,56 @@ impl Parser {
     }
 
     fn statement(&mut self) -> Result<Statement> {
-        if self.matched(vec![TokenType::For]) {
+        if self.match_one(TokenType::For) {
             return self.for_statement();
         }
 
-        if self.matched(vec![TokenType::If]) {
+        if self.match_one(TokenType::If) {
             return self.branch_statement();
         }
 
-        if self.matched(vec![TokenType::Print]) {
+        if self.match_one(TokenType::Print) {
             return self.print_statement();
         }
 
-        if self.matched(vec![TokenType::While]) {
+        if self.match_one(TokenType::Return) {
+            return self.return_statement();
+        }
+
+        if self.match_one(TokenType::While) {
             return self.while_statement();
         }
 
-        if self.matched(vec![TokenType::Break]) {
+        if self.match_one(TokenType::Break) {
             let token = self.previous();
             self.consume(TokenType::Semicolon, "Expect ';' after 'break'")?;
             return Ok(Statement::create_break_statement(token));
         }
 
-        if self.matched(vec![TokenType::Continue]) {
+        if self.match_one(TokenType::Continue) {
             let token = self.previous();
             self.consume(TokenType::Semicolon, "Expect ';' after 'continue'")?;
             return Ok(Statement::create_continue_statement(token));
         }
 
-        if self.matched(vec![TokenType::LeftBrace]) {
+        if self.match_one(TokenType::LeftBrace) {
             return Ok(Statement::create_block_statement(self.block_statement()?));
         }
 
         self.expression_statement()
+    }
+
+    fn return_statement(&mut self) -> Result<Statement> {
+        let key_word = self.previous();
+        let value = if self.check(TokenType::Semicolon) {
+            None
+        } else {
+            Some(self.expression()?)
+        };
+
+        self.consume(TokenType::Semicolon, "Expect ';' after return value.")?;
+
+        Ok(Statement::create_return_statement(key_word, value))
     }
 
     fn for_statement(&mut self) -> Result<Statement> {
@@ -187,7 +268,7 @@ impl Parser {
         let then_branch = self.statement()?;
         let mut else_branch = None;
 
-        if self.matched(vec![TokenType::Else]) {
+        if self.match_one(TokenType::Else) {
             else_branch = Some(Box::new(self.statement()?));
         }
 
@@ -229,7 +310,7 @@ impl Parser {
     fn assignment(&mut self) -> Result<Expression> {
         let expr = self.or()?;
 
-        if self.matched(vec![TokenType::Equal]) {
+        if self.match_one(TokenType::Equal) {
             let eq = self.previous();
             let value = self.assignment()?;
 
@@ -250,7 +331,7 @@ impl Parser {
     fn or(&mut self) -> Result<Expression> {
         let mut expr = self.and()?;
 
-        while self.matched(vec![TokenType::Or]) && !self.is_at_end() {
+        while self.match_one(TokenType::Or) && !self.is_at_end() {
             let op = self.previous();
             let right = self.and()?;
             expr = Expression::create_logical_expression(Box::new(expr), op, Box::new(right));
@@ -260,39 +341,23 @@ impl Parser {
     }
 
     fn and(&mut self) -> Result<Expression> {
-        let mut expr = self.comma()?;
+        let mut expr = self.ternary()?;
 
-        while self.matched(vec![TokenType::And]) && !self.is_at_end() {
+        while self.match_one(TokenType::And) && !self.is_at_end() {
             let op = self.previous();
-            let right = self.comma()?;
+            let right = self.ternary()?;
             expr = Expression::create_logical_expression(Box::new(expr), op, Box::new(right));
         }
 
         Ok(expr)
     }
 
-    fn comma(&mut self) -> Result<Expression> {
-        let mut expr = self.ternary();
-
-        while self.matched(vec![TokenType::Comma]) {
-            let op = self.previous();
-            let right = self.ternary();
-            expr = Ok(Expression::create_binary_expression(
-                Box::new(expr?),
-                op,
-                Box::new(right?),
-            ));
-        }
-
-        expr
-    }
-
     fn ternary(&mut self) -> Result<Expression> {
         let cmp = self.equality();
 
-        if self.matched(vec![TokenType::QuestionMark]) {
+        if self.match_one(TokenType::QuestionMark) {
             let true_value = self.ternary();
-            return if self.matched(vec![TokenType::Colon]) {
+            return if self.match_one(TokenType::Colon) {
                 let false_value = self.ternary();
                 Ok(Expression::create_ternary_expression(
                     Box::new(cmp?),
@@ -310,7 +375,7 @@ impl Parser {
     fn equality(&mut self) -> Result<Expression> {
         let mut expr = self.comparison();
 
-        while self.matched(vec![TokenType::BangEqual, TokenType::EqualEqual]) {
+        while self.match_many(vec![TokenType::BangEqual, TokenType::EqualEqual]) {
             let op = self.previous();
             let right = self.comparison();
             expr = Ok(Expression::create_binary_expression(
@@ -326,7 +391,7 @@ impl Parser {
     fn comparison(&mut self) -> Result<Expression> {
         let mut expr = self.term();
 
-        while self.matched(vec![
+        while self.match_many(vec![
             TokenType::Greater,
             TokenType::GreaterEqual,
             TokenType::Less,
@@ -347,7 +412,7 @@ impl Parser {
     fn term(&mut self) -> Result<Expression> {
         let mut expr = self.factor();
 
-        while self.matched(vec![TokenType::Plus, TokenType::Minus]) {
+        while self.match_many(vec![TokenType::Plus, TokenType::Minus]) {
             let op = self.previous();
             let right = self.factor();
             expr = Ok(Expression::create_binary_expression(
@@ -363,7 +428,7 @@ impl Parser {
     fn factor(&mut self) -> Result<Expression> {
         let mut expr = self.unary();
 
-        while self.matched(vec![TokenType::Star, TokenType::Slash]) {
+        while self.match_many(vec![TokenType::Star, TokenType::Slash]) {
             let op = self.previous();
             let right = self.unary();
             expr = Ok(Expression::create_binary_expression(
@@ -377,33 +442,81 @@ impl Parser {
     }
 
     fn unary(&mut self) -> Result<Expression> {
-        if self.matched(vec![TokenType::Bang, TokenType::Minus, TokenType::Plus]) {
+        if self.match_many(vec![TokenType::Bang, TokenType::Minus, TokenType::Plus]) {
             let op = self.previous();
             let right = self.unary();
             return Ok(Expression::create_unary_expression(op, Box::new(right?)));
         }
 
-        self.primary()
+        self.call()
+    }
+
+    fn call(&mut self) -> Result<Expression> {
+        let callee = self.primary()?;
+
+        if self.match_one(TokenType::LeftParen) {
+            let args = self.arguments()?;
+            let paren = self.consume(TokenType::RightParen, "Expect ')' after arguments")?;
+
+            Ok(Expression::create_call_expression(
+                Box::new(callee),
+                paren,
+                args,
+            ))
+        } else {
+            Ok(callee)
+        }
+    }
+
+    fn arguments(&mut self) -> Result<Vec<Expression>> {
+        let mut args = vec![];
+
+        while !self.check(TokenType::RightParen) {
+            if args.len() > 256 {
+                return Err(Self::error(
+                    self.peek(),
+                    "The maximum number of arguments is 256.",
+                ));
+            }
+
+            args.push(self.expression()?);
+            if self.check(TokenType::Comma) {
+                self.advance();
+            }
+        }
+
+        Ok(args)
+    }
+
+    fn lambda(&mut self) -> Result<Expression> {
+        self.consume(TokenType::LeftParen, "Expect '(' after func.")?;
+
+        let (params, body) = self.function_params_and_body()?;
+
+        let lambda = Expression::create_lambda_expression(params, body);
+
+        Ok(lambda)
     }
 
     fn primary(&mut self) -> Result<Expression> {
-        if self.matched(vec![TokenType::False]) {
+        if self.match_one(TokenType::False) {
             Ok(Expression::create_literal_expression(Literal::Bool(false)))
-        } else if self.matched(vec![TokenType::True]) {
+        } else if self.match_one(TokenType::True) {
             Ok(Expression::create_literal_expression(Literal::Bool(true)))
-        } else if self.matched(vec![TokenType::Nil]) {
+        } else if self.match_one(TokenType::Nil) {
             Ok(Expression::create_literal_expression(Literal::Nil))
-        } else if self.matched(vec![TokenType::Number, TokenType::String]) {
+        } else if self.match_many(vec![TokenType::Number, TokenType::String]) {
             Ok(Expression::create_literal_expression(
                 self.previous().literal.unwrap(),
             ))
-        } else if self.matched(vec![TokenType::Identifier]) {
+        } else if self.match_one(TokenType::Identifier) {
             Ok(Expression::create_variable_expression(self.previous()))
-        } else if self.matched(vec![TokenType::LeftParen]) {
+        } else if self.match_one(TokenType::LeftParen) {
             let expr = self.expression();
-            self.consume(TokenType::RightParen, "Expect ')' after expression.")
-                .unwrap();
+            self.consume(TokenType::RightParen, "Expect ')' after expression.")?;
             Ok(Expression::create_grouping_expression(Box::new(expr?)))
+        } else if self.match_one(TokenType::Func) {
+            Ok(self.lambda()?)
         } else {
             use TokenType::{
                 BangEqual, Comma, EqualEqual, Greater, GreaterEqual, Less, LessEqual, Slash, Star,
@@ -421,10 +534,17 @@ impl Parser {
         }
     }
 
-    fn matched(&mut self, types: Vec<TokenType>) -> bool {
+    fn match_one(&mut self, token_type: TokenType) -> bool {
+        if self.check(token_type) {
+            self.advance();
+            return true;
+        }
+        false
+    }
+
+    fn match_many(&mut self, types: Vec<TokenType>) -> bool {
         for token_type in types {
-            if self.check(token_type) {
-                self.advance();
+            if self.match_one(token_type) {
                 return true;
             }
         }
@@ -460,7 +580,7 @@ impl Parser {
     }
 
     fn previous(&self) -> Token {
-        (*self.tokens.get(self.current - 1).unwrap()).clone()
+        self.tokens.get(self.current - 1).unwrap().clone()
     }
 
     fn error(token: &Token, msg: &str) -> LoxError {
@@ -479,10 +599,10 @@ impl Parser {
             if self.previous().token_type == TokenType::Semicolon {
                 return;
             }
-            use TokenType::{Class, For, Fun, If, Let, Print, Return, While};
+            use TokenType::{Class, For, Func, If, Let, Print, Return, While};
 
             match self.previous().token_type {
-                Class | Fun | Let | For | If | While | Print | Return => {
+                Class | Func | Let | For | If | While | Print | Return => {
                     return;
                 }
                 _ => {

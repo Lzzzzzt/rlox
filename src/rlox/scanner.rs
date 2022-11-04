@@ -1,7 +1,11 @@
-use crate::rlox::token::{Literal, Token, KEYWORD_MAP};
-use crate::rlox::token_type::TokenType;
+
+use std::rc::Rc;
+
+use super::token::{Token, KEYWORD_MAP};
+use super::types::TokenType;
 
 use super::error::LoxError;
+use super::types::Literal;
 
 pub struct Scanner {
     source: String,
@@ -17,7 +21,6 @@ impl Scanner {
         Self {
             source,
             tokens: vec![],
-
             start: 0,
             current: 0,
             line: 1,
@@ -32,7 +35,6 @@ impl Scanner {
 
         self.tokens
             .push(Token::new(TokenType::Eof, "".into(), self.line));
-        // return self.tokens;
 
         Ok(())
     }
@@ -137,7 +139,9 @@ impl Scanner {
 
         self.add_token_with_literal(
             TokenType::String,
-            Literal::String(self.source[self.start + 1..self.current - 1].into()),
+            Literal::String(Rc::new(
+                self.source[self.start + 1..self.current - 1].into(),
+            )),
         );
 
         Ok(())
@@ -189,7 +193,7 @@ impl Scanner {
 
     fn advance(&mut self) -> char {
         self.current += 1;
-        return self.source.chars().nth(self.current - 1).unwrap();
+        self.source.chars().nth(self.current - 1).unwrap()
     }
 
     fn expected(&self, expected: char) -> bool {

@@ -2,10 +2,11 @@ use std::env;
 use std::fs::read_to_string;
 use std::io::{stdout, Write};
 use std::path::PathBuf;
+use std::time::SystemTime;
 
 use super::parser::Parser;
 use super::scanner::Scanner;
-use super::token_type::TokenType;
+use super::types::TokenType;
 
 use super::error::LoxError;
 
@@ -69,6 +70,8 @@ impl Lox {
     }
 
     fn run(&mut self, source: String) {
+        let start = SystemTime::now();
+
         let mut scanner = Scanner::new(source);
 
         if let Err(err) = scanner.scan_tokens() {
@@ -89,6 +92,11 @@ impl Lox {
                 }
             }
         }
+
+        println!(
+            "Total Cost {}ms",
+            SystemTime::now().duration_since(start).unwrap().as_micros() as f64 / 1000.0
+        );
     }
 
     pub fn error(error: LoxError) {
@@ -112,6 +120,7 @@ impl Lox {
             }
             LoxError::IoError { msg } => Self::report(0, "", msg.as_str()),
             LoxError::ParseTokenError { line, msg } => Self::report(line, "", msg),
+            LoxError::Return { .. } => (),
         }
     }
 

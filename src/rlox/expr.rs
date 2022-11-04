@@ -1,4 +1,4 @@
-use super::token::{Literal, Token};
+use super::{token::Token, types::Literal, stmt::Statement};
 use paste::paste;
 macro_rules! expr {
     ($($name: ident { $($attr: ident: $attr_type: ty), * }),* $(,)?) => {
@@ -56,7 +56,7 @@ macro_rules! expr {
 expr! {
     AssignExpression { name: Token, value: Box<Expression> },
     BinaryExpression { left: Box<Expression>, op: Token, right: Box<Expression> },
-    CallExpression { callee: Box<Expression>, paren: Token, argument: Vec<Expression> },
+    CallExpression { callee: Box<Expression>, paren: Token, arguments: Vec<Expression> },
     GetExpression { object: Box<Expression>, name: Token },
     GroupingExpression { expression: Box<Expression> },
     LiteralExpression { value: Literal },
@@ -67,4 +67,5 @@ expr! {
     TernaryExpression { cmp: Box<Expression>, true_value: Box<Expression>, false_value: Box<Expression> },
     UnaryExpression { op: Token, right: Box<Expression> },
     VariableExpression { name: Token },
+    LambdaExpression { params: Vec<Token>, body: Vec<Statement> },
 }

@@ -1,22 +1,27 @@
 use std::{cell::RefCell, env, rc::Rc};
 
 use super::{
+    callable::Callable,
     environment::Environment,
     error::{LoxError, Result},
     expr::{Expression, Visitor as ExprVisitor},
     stmt::{Statement, Visitor as StmtVisitor},
-    token::{Literal, Token},
-    token_type::TokenType,
+    token::Token,
+    types::{Function, Literal},
+    types::{Lambda, TokenType},
 };
 
 pub struct Interpreter {
-    env: Rc<RefCell<Environment>>,
+    pub environment: Rc<RefCell<Environment>>,
+    pub global: Rc<RefCell<Environment>>,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
+        let global = Rc::new(RefCell::new(Environment::new(None)));
         Self {
-            env: Rc::new(RefCell::new(Environment::new(None))),
+            environment: global.clone(),
+            global,
         }
     }
 
@@ -28,14 +33,17 @@ impl Interpreter {
         Ok(())
     }
 
+    #[inline]
     fn evaluate(&mut self, expr: &Expression) -> Result<Literal> {
         expr.accept(self)
     }
 
-    fn execute(&mut self, stmt: &Statement) -> Result<()> {
+    #[inline]
+    pub fn execute(&mut self, stmt: &Statement) -> Result<()> {
         stmt.accept(self)
     }
 
+    #[inline]
     fn get_num(&self, obj: &Literal, op: &Token) -> Result<f64> {
         if let Literal::Number(num) = obj {
             return Ok(*num);
@@ -47,7 +55,8 @@ impl Interpreter {
         ))
     }
 
-    fn get_string(&self, obj: &Literal, op: &Token) -> Result<String> {
+    #[inline]
+    fn get_string(&self, obj: &Literal, op: &Token) -> Result<Rc<String>> {
         if let Literal::String(string) = obj {
             return Ok(string.clone());
         }
@@ -58,6 +67,7 @@ impl Interpreter {
         ))
     }
 
+    #[inline]
     fn get_bool(&self, obj: &Literal) -> Result<bool> {
         if let Literal::Bool(b) = obj {
             return Ok(*b);
@@ -65,35 +75,61 @@ impl Interpreter {
 
         Err(LoxError::RuntimeError {
             line: 0,
-            lexeme: obj.to_string(),
+            lexeme: Rc::new(obj.to_string()),
             msg: "Expected type is `bool`".into(),
         })
     }
 
+    #[inline]
+    fn get_func(&self, obj: &Literal, op: &Token) -> Result<Rc<Function>> {
+        if let Literal::Func(func) = obj {
+            return Ok(Rc::clone(func));
+        }
+
+        Err(LoxError::create_runtime_error(
+            op,
+            "Target must be callable.".into(),
+        ))
+    }
+
+    #[inline]
+    fn get_lambda(&self, obj: &Literal, op: &Token) -> Result<Rc<Lambda>> {
+        if let Literal::Lambda(lambda) = obj {
+            return Ok(Rc::clone(lambda));
+        }
+
+        Err(LoxError::create_runtime_error(
+            op,
+            "Target must be callable.".into(),
+        ))
+    }
+
+    #[inline]
     fn is_true(&self, obj: &Literal) -> bool {
+        use Literal::*;
         match obj {
-            Literal::String(_) | Literal::Number(_) => true,
-            Literal::Bool(b) => *b,
-            Literal::Nil => false,
+            String(_) | Number(_) | Func(_) | Lambda(_) => true,
+            Bool(b) => *b,
+            Nil => false,
         }
     }
 
-    fn execute_block_statement(
+    pub fn execute_block_statement(
         &mut self,
         statements: &[Statement],
         env: Environment,
     ) -> Result<()> {
-        let pre = self.env.clone();
+        let pre = self.environment.clone();
 
-        self.env = Rc::new(RefCell::new(env));
+        self.environment = Rc::new(RefCell::new(env));
 
         for stmt in statements {
             if let Err(e) = self.execute(stmt) {
-                self.env = pre;
+                self.environment = pre;
                 return Err(e);
             }
         }
-        self.env = pre;
+        self.environment = pre;
 
         Ok(())
     }
@@ -106,7 +142,7 @@ impl ExprVisitor<Literal, LoxError> for Interpreter {
         assign_expression: &super::expr::AssignExpression,
     ) -> Result<Literal> {
         let value = self.evaluate(&assign_expression.value)?;
-        self.env
+        self.environment
             .borrow_mut()
             .assign(&assign_expression.name, value.clone())?;
         Ok(value)
@@ -146,10 +182,10 @@ impl ExprVisitor<Literal, LoxError> for Interpreter {
                 Literal::String(left) => {
                     let right = self
                         .get_string(&right, op)
-                        .unwrap_or_else(|_| right.to_string());
+                        .unwrap_or_else(|_| Rc::new(right.to_string()));
 
-                    let str = String::from_iter([left, right]);
-                    Ok(Literal::String(str))
+                    let str = left.to_string() + &right.to_string();
+                    Ok(Literal::String(Rc::new(str)))
                 }
                 Literal::Number(left) => {
                     let right = self.get_num(&right, op)?;
@@ -194,7 +230,56 @@ impl ExprVisitor<Literal, LoxError> for Interpreter {
         &mut self,
         call_expression: &super::expr::CallExpression,
     ) -> Result<Literal> {
-        todo!()
+        let callee = self.evaluate(&call_expression.callee)?;
+
+        match self.get_func(&callee, &call_expression.paren) {
+            Ok(func) => {
+                let mut arguments = {
+                    let mut a = vec![];
+                    for arg in &call_expression.arguments {
+                        a.push(self.evaluate(arg)?);
+                    }
+                    a
+                };
+
+                if arguments.len() != func.parameter_num() {
+                    return Err(LoxError::create_runtime_error(
+                        &call_expression.paren,
+                        format!(
+                            "Expect {} parameters, but got {}",
+                            func.parameter_num(),
+                            arguments.len()
+                        ),
+                    ));
+                }
+
+                func.call(self, arguments)
+            }
+            Err(e) => {
+                let mut lambda = self.get_lambda(&callee, &call_expression.paren)?;
+
+                let mut arguments = {
+                    let mut a = vec![];
+                    for arg in &call_expression.arguments {
+                        a.push(self.evaluate(arg)?);
+                    }
+                    a
+                };
+
+                if arguments.len() != lambda.parameter_num() {
+                    return Err(LoxError::create_runtime_error(
+                        &call_expression.paren,
+                        format!(
+                            "Expect {} parameters, but got {}",
+                            lambda.parameter_num(),
+                            arguments.len()
+                        ),
+                    ));
+                }
+
+                lambda.call(self, arguments)
+            }
+        }
     }
 
     fn visit_get_expression(
@@ -288,7 +373,17 @@ impl ExprVisitor<Literal, LoxError> for Interpreter {
         &mut self,
         variable_expression: &super::expr::VariableExpression,
     ) -> Result<Literal> {
-        self.env.borrow_mut().get(&variable_expression.name)
+        self.environment.borrow_mut().get(&variable_expression.name)
+    }
+
+    fn visit_lambda_expression(
+        &mut self,
+        lambda_expression: &super::expr::LambdaExpression,
+    ) -> Result<Literal, LoxError> {
+        Ok(Literal::Lambda(Rc::new(Lambda::from_lambda(
+            lambda_expression,
+            self.environment.clone(),
+        ))))
     }
 }
 
@@ -318,11 +413,11 @@ impl StmtVisitor<(), LoxError> for Interpreter {
     fn visit_var_statement(&mut self, var_statement: &super::stmt::VarStatement) -> Result<()> {
         if var_statement.initializer.is_some() {
             let value = self.evaluate(var_statement.initializer.as_ref().unwrap())?;
-            self.env
+            self.environment
                 .borrow_mut()
                 .define(var_statement.name.lexeme.clone(), value)
         } else {
-            self.env
+            self.environment
                 .borrow_mut()
                 .define(var_statement.name.lexeme.clone(), Literal::Nil)
         }
@@ -336,7 +431,7 @@ impl StmtVisitor<(), LoxError> for Interpreter {
     ) -> Result<()> {
         self.execute_block_statement(
             &block_statement.statements,
-            Environment::new(Some(self.env.clone())),
+            Environment::new(Some(self.environment.clone())),
         )
     }
 
@@ -407,5 +502,33 @@ impl StmtVisitor<(), LoxError> for Interpreter {
             &break_statement.token,
             "'break' must be in 'for' or 'while' statement".into(),
         ))
+    }
+
+    fn visit_function_statement(
+        &mut self,
+        function_statement: &super::stmt::FunctionStatement,
+    ) -> Result<(), LoxError> {
+        let func = Literal::Func(Rc::new(Function::new(
+            function_statement,
+            self.environment.clone(),
+        )));
+        self.environment
+            .borrow_mut()
+            .define(function_statement.name.lexeme.clone(), func);
+
+        Ok(())
+    }
+
+    fn visit_return_statement(
+        &mut self,
+        return_statement: &super::stmt::ReturnStatement,
+    ) -> Result<(), LoxError> {
+        let value = if let Some(v) = &return_statement.value {
+            self.evaluate(v)?
+        } else {
+            Literal::Nil
+        };
+
+        Err(LoxError::create_return(value))
     }
 }

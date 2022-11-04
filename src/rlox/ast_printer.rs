@@ -1,6 +1,7 @@
 use super::{
     error::{LoxError, Result},
     expr::{Expression, Visitor},
+    types::Literal,
 };
 
 pub struct AstPrinter;
@@ -77,10 +78,12 @@ impl Visitor<String, LoxError> for AstPrinter {
         literal_expression: &super::expr::LiteralExpression,
     ) -> Result<String> {
         match &literal_expression.value {
-            super::token::Literal::String(string) => Ok(string.into()),
-            super::token::Literal::Number(number) => Ok(format!("{}", number)),
-            super::token::Literal::Bool(b) => Ok(b.to_string()),
-            super::token::Literal::Nil => Ok("nil".into()),
+            Literal::String(string) => Ok(string.to_string()),
+            Literal::Number(number) => Ok(number.to_string()),
+            Literal::Bool(b) => Ok(b.to_string()),
+            Literal::Nil => Ok("nil".into()),
+            Literal::Func(func) => Ok(func.to_string()),
+            Literal::Lambda(l) => Ok(l.to_string()),
         }
     }
 
@@ -140,6 +143,13 @@ impl Visitor<String, LoxError> for AstPrinter {
         &mut self,
         variable_expression: &super::expr::VariableExpression,
     ) -> Result<String> {
+        todo!()
+    }
+
+    fn visit_lambda_expression(
+        &mut self,
+        lambda_expression: &super::expr::LambdaExpression,
+    ) -> Result<String, LoxError> {
         todo!()
     }
 }
