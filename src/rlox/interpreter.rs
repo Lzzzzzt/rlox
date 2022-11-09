@@ -71,7 +71,7 @@ impl Interpreter {
         }
 
         Err(LoxError::RuntimeError {
-            line: 0,
+            position: (0, 0),
             lexeme: Rc::new(obj.to_string()),
             msg: "Expected type is `bool`".into(),
         })

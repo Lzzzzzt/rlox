@@ -37,8 +37,11 @@ impl Scanner {
             self.scan_token()?;
         }
 
-        self.tokens
-            .push(Token::new(TokenType::Eof, "".into(), self.line));
+        self.tokens.push(Token::new(
+            TokenType::Eof,
+            "".into(),
+            (self.line, self.start),
+        ));
 
         Ok(())
     }
@@ -115,7 +118,7 @@ impl Scanner {
                     self.parse_identifier();
                 } else {
                     return Err(LoxError::ParseTokenError {
-                        line: self.line,
+                        position: (self.line, self.start),
                         msg: "Unexpected character.",
                     });
                 }
@@ -134,7 +137,7 @@ impl Scanner {
 
         if self.is_at_end() {
             return Err(LoxError::ParseTokenError {
-                line: self.line,
+                position: (self.line, self.start),
                 msg: "Unterminated String.",
             });
         }
@@ -215,7 +218,7 @@ impl Scanner {
     fn add_token(&mut self, token_type: TokenType) {
         let text = &self.source[self.start..self.current];
         self.tokens
-            .push(Token::new(token_type, text.into(), self.line));
+            .push(Token::new(token_type, text.into(), (self.line, self.start)));
     }
 
     fn add_token_with_literal(&mut self, token_type: TokenType, literal: Literal) {
@@ -224,7 +227,7 @@ impl Scanner {
             token_type,
             text.into(),
             Some(literal),
-            self.line,
+            (self.line, self.start),
         ));
     }
 }

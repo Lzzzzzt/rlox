@@ -35,15 +35,15 @@ pub struct Token {
     pub token_type: TokenType,
     pub lexeme: Rc<String>,
     pub literal: Option<Literal>,
-    pub line: usize,
+    pub position: (usize, usize),
 }
 
 impl Token {
-    pub fn new(token_type: TokenType, lexeme: String, line: usize) -> Self {
+    pub fn new(token_type: TokenType, lexeme: String, position: (usize, usize)) -> Self {
         Self {
             token_type,
             lexeme: Rc::new(lexeme),
-            line,
+            position,
             literal: None,
         }
     }
@@ -52,13 +52,13 @@ impl Token {
         token_type: TokenType,
         lexeme: String,
         literal: Option<Literal>,
-        line: usize,
+        position: (usize, usize),
     ) -> Self {
         Self {
             token_type,
             lexeme: Rc::new(lexeme),
             literal,
-            line,
+            position,
         }
     }
 }

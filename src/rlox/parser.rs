@@ -585,7 +585,7 @@ impl Parser {
 
     fn error(token: &Token, msg: &str) -> LoxError {
         ParseError {
-            line: token.line,
+            position: token.position,
             lexeme: token.lexeme.clone(),
             token_type: token.token_type,
             msg: msg.into(),

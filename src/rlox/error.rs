@@ -14,27 +14,27 @@ pub enum LoxError {
         msg: String,
     },
     ParseTokenError {
-        line: usize,
+        position: (usize, usize),
         msg: &'static str,
     },
     ParseError {
-        line: usize,
+        position: (usize, usize),
         lexeme: Rc<String>,
         token_type: TokenType,
         msg: String,
     },
     RuntimeError {
-        line: usize,
+        position: (usize, usize),
         lexeme: Rc<String>,
         msg: String,
     },
     Break {
-        line: usize,
+        position: (usize, usize),
         lexeme: Rc<String>,
         msg: String,
     },
     Continue {
-        line: usize,
+        position: (usize, usize),
         lexeme: Rc<String>,
         msg: String,
     },
@@ -46,7 +46,7 @@ pub enum LoxError {
 impl LoxError {
     pub fn create_runtime_error(token: &Token, msg: String) -> Self {
         Self::RuntimeError {
-            line: token.line,
+            position: token.position,
             lexeme: token.lexeme.clone(),
             msg,
         }
@@ -54,7 +54,7 @@ impl LoxError {
 
     pub fn create_break(token: &Token, msg: String) -> Self {
         Self::Break {
-            line: token.line,
+            position: token.position,
             lexeme: token.lexeme.clone(),
             msg,
         }
@@ -62,7 +62,7 @@ impl LoxError {
 
     pub fn create_continue(token: &Token, msg: String) -> Self {
         Self::Continue {
-            line: token.line,
+            position: token.position,
             lexeme: token.lexeme.clone(),
             msg,
         }

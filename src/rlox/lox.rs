@@ -1,10 +1,10 @@
-use std::env;
 use std::fs::read_to_string;
-use std::io::{stdout, Write};
+
 use std::path::PathBuf;
 use std::time::SystemTime;
 
 use super::parser::Parser;
+use super::repl;
 use super::scanner::Scanner;
 use super::token::Token;
 use super::types::TokenType;
@@ -15,30 +15,22 @@ use super::interpreter::Interpreter;
 
 static mut HAD_ERROR: bool = false;
 
-fn is_error() -> bool {
+pub fn is_error() -> bool {
     unsafe { HAD_ERROR }
 }
 
-fn no_error() {
+pub fn no_error() {
     unsafe { HAD_ERROR = false }
 }
 
-fn had_error() {
+pub fn had_error() {
     unsafe { HAD_ERROR = true }
 }
 
-pub struct Lox {
-    interpreter: Interpreter,
-}
+pub struct Lox;
 
 impl Lox {
-    pub fn new() -> Self {
-        Self {
-            interpreter: Interpreter::new(),
-        }
-    }
-
-    pub fn run_file(mut self, path: PathBuf) -> Result<(), LoxError> {
+    pub fn run_file(path: PathBuf) -> Result<(), LoxError> {
         let string = read_to_string(path)?;
 
         let mut scanner = Scanner::new(string);
@@ -48,7 +40,9 @@ impl Lox {
             had_error();
         }
 
-        self.run(scanner.tokens);
+        let mut interpreter = Interpreter::new();
+
+        Self::run(&mut interpreter, scanner.tokens);
 
         if is_error() {
             eprintln!("Exit because error before!");
@@ -57,42 +51,19 @@ impl Lox {
         Ok(())
     }
 
-    pub fn run_prompt(mut self) -> Result<(), LoxError> {
-        let stdin = std::io::stdin();
-
-        env::set_var("RLOX_RUN_MODE", "P");
-
-        loop {
-            print!(">>> ");
-            stdout().flush()?;
-
-            let mut line = String::new();
-            let len = stdin.read_line(&mut line)?;
-            if len == 0 {
-                break;
-            }
-
-            let mut scanner = Scanner::new(line);
-
-            if let Err(err) = scanner.scan_tokens() {
-                Self::error(err);
-                had_error();
-            }
-
-            self.run(scanner.tokens);
-            no_error();
-        }
-
+    pub fn run_prompt() -> Result<(), LoxError> {
+        let mut repl = repl::Repl::new();
+        repl.run(Self::run);
         Ok(())
     }
 
-    fn run(&mut self, tokens: Vec<Token>) {
+    fn run(interpreter: &mut Interpreter, tokens: Vec<Token>) {
         let start = SystemTime::now();
 
         let mut parser = Parser::new(tokens);
 
         match parser.parse() {
-            Ok(expression) => match self.interpreter.interpret(&expression) {
+            Ok(expression) => match interpreter.interpret(&expression) {
                 Ok(value) => value,
                 Err(err) => Self::error(err),
             },
@@ -112,7 +83,7 @@ impl Lox {
     pub fn error(error: LoxError) {
         match error {
             LoxError::ParseError {
-                line,
+                position: line,
                 lexeme,
                 msg,
                 token_type,
@@ -123,29 +94,47 @@ impl Lox {
                     Self::report(line, format!("at `{}`", lexeme).as_str(), msg.as_str())
                 }
             }
-            LoxError::RuntimeError { line, lexeme, msg }
-            | LoxError::Break { line, lexeme, msg }
-            | LoxError::Continue { line, lexeme, msg } => {
-                Self::report(line, format!("at `{}`", lexeme).as_str(), msg.as_str())
+            LoxError::RuntimeError {
+                position,
+                lexeme,
+                msg,
             }
-            LoxError::IoError { msg } => Self::report(0, "", msg.as_str()),
-            LoxError::ParseTokenError { line, msg } => Self::report(line, "", msg),
+            | LoxError::Break {
+                position,
+                lexeme,
+                msg,
+            }
+            | LoxError::Continue {
+                position,
+                lexeme,
+                msg,
+            } => Self::report(position, format!("at `{}`", lexeme).as_str(), msg.as_str()),
+            LoxError::IoError { msg } => Self::report((0, 0), "", msg.as_str()),
+            LoxError::ParseTokenError {
+                position: line,
+                msg,
+            } => Self::report(line, "", msg),
             LoxError::Return { .. } => (),
         }
     }
 
-    fn report(line: usize, err_pos: &str, msg: &str) {
-        if err_pos.is_empty() {
-            if line != 0 {
-                println!("[line {line}] LoxError: {msg}");
+    fn report(line: (usize, usize), err_pos: &str, msg: &str) {
+        let err_msg = if err_pos.is_empty() {
+            if line != (0, 0) {
+                format!("[row:{:3}, col:{:3}] LoxError: {msg}", line.0, line.1)
             } else {
-                println!("[line] LoxError: {msg}");
+                format!("[----------------] LoxError: {msg}")
             }
-        } else if line != 0 {
-            println!("[line {line}] LoxError {err_pos}: {msg}");
+        } else if line != (0, 0) {
+            format!(
+                "[row:{:3}, col:{:3}] LoxError {err_pos}: {msg}",
+                line.0, line.1
+            )
         } else {
-            println!("[line] LoxError {err_pos}: {msg}");
-        }
+            format!("[----------------] LoxError {err_pos}: {msg}")
+        };
+
+        println!("\x1b[1;31m{err_msg}\x1b[0m");
         had_error()
     }
 }

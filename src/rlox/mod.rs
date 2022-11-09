@@ -10,3 +10,4 @@ mod scanner;
 mod stmt;
 mod token;
 mod types;
+mod repl;
