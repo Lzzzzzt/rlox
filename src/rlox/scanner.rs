@@ -1,4 +1,3 @@
-
 use std::rc::Rc;
 
 use super::token::{Token, KEYWORD_MAP};
@@ -25,6 +24,11 @@ impl Scanner {
             current: 0,
             line: 1,
         }
+    }
+
+    #[allow(unused)]
+    pub fn append_source(&mut self, source: String) {
+        self.source.push_str(&source[..])
     }
 
     pub fn scan_tokens(&mut self) -> Result<(), LoxError> {

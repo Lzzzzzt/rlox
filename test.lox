@@ -6,4 +6,8 @@ func fib(n) {
     return fib(n - 1) + fib(n - 2);
 }
 
-print fib(30);
+print fib(40);
+
+for (let i = 0; i < 10; i = i + 1) {
+    print i;
+}

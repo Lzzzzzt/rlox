@@ -1,4 +1,4 @@
-use std::{cell::RefCell, env, rc::Rc};
+use std::{cell::RefCell, rc::Rc};
 
 use super::{
     callable::Callable,
@@ -400,12 +400,7 @@ impl StmtVisitor<(), LoxError> for Interpreter {
         &mut self,
         expression_statement: &super::stmt::ExpressionStatement,
     ) -> Result<()> {
-        if env::var("RLOX_RUN_MODE").is_err() {
-            self.evaluate(&expression_statement.expression)?;
-        } else {
-            println!("{}", self.evaluate(&expression_statement.expression)?);
-        }
-
+        self.evaluate(&expression_statement.expression)?;
         Ok(())
     }
 
@@ -439,16 +434,6 @@ impl StmtVisitor<(), LoxError> for Interpreter {
         Ok(())
     }
 
-    fn visit_block_statement(
-        &mut self,
-        block_statement: &super::stmt::BlockStatement,
-    ) -> Result<()> {
-        self.execute_block_statement_with_new_env(
-            &block_statement.statements,
-            // Environment::new(Some(self.environment.clone())),
-        )
-    }
-
     fn visit_multi_var_statement(
         &mut self,
         multi_var_statement: &super::stmt::MultiVarStatement,
@@ -457,6 +442,16 @@ impl StmtVisitor<(), LoxError> for Interpreter {
             self.execute(var)?;
         }
         Ok(())
+    }
+
+    fn visit_block_statement(
+        &mut self,
+        block_statement: &super::stmt::BlockStatement,
+    ) -> Result<()> {
+        self.execute_block_statement_with_new_env(
+            &block_statement.statements,
+            // Environment::new(Some(self.environment.clone())),
+        )
     }
 
     fn visit_branch_statement(

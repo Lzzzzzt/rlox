@@ -6,6 +6,7 @@ use std::time::SystemTime;
 
 use super::parser::Parser;
 use super::scanner::Scanner;
+use super::token::Token;
 use super::types::TokenType;
 
 use super::error::LoxError;
@@ -39,7 +40,15 @@ impl Lox {
 
     pub fn run_file(mut self, path: PathBuf) -> Result<(), LoxError> {
         let string = read_to_string(path)?;
-        self.run(string);
+
+        let mut scanner = Scanner::new(string);
+
+        if let Err(err) = scanner.scan_tokens() {
+            Self::error(err);
+            had_error();
+        }
+
+        self.run(scanner.tokens);
 
         if is_error() {
             eprintln!("Exit because error before!");
@@ -62,24 +71,25 @@ impl Lox {
             if len == 0 {
                 break;
             }
-            self.run(line);
+
+            let mut scanner = Scanner::new(line);
+
+            if let Err(err) = scanner.scan_tokens() {
+                Self::error(err);
+                had_error();
+            }
+
+            self.run(scanner.tokens);
             no_error();
         }
 
         Ok(())
     }
 
-    fn run(&mut self, source: String) {
+    fn run(&mut self, tokens: Vec<Token>) {
         let start = SystemTime::now();
 
-        let mut scanner = Scanner::new(source);
-
-        if let Err(err) = scanner.scan_tokens() {
-            Self::error(err);
-            had_error();
-        }
-
-        let mut parser = Parser::new(scanner.tokens);
+        let mut parser = Parser::new(tokens);
 
         match parser.parse() {
             Ok(expression) => match self.interpreter.interpret(&expression) {
