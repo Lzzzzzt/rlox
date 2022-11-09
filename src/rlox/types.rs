@@ -1,14 +1,14 @@
 use std::{
-    cell::RefCell,
     fmt::{Display, Formatter},
     rc::Rc,
 };
 
 use super::{
     callable::Callable,
-    environment::Environment,
+    environment::Env,
     error::LoxError,
     expr::LambdaExpression,
+    interpreter::Interpreter,
     stmt::{FunctionStatement, Statement},
     token::Token,
 };
@@ -108,29 +108,41 @@ impl Display for Literal {
     }
 }
 
+static mut LAMBDA_COUNT: u32 = 0;
+
+fn define_lambda() -> u32 {
+    let count = unsafe { LAMBDA_COUNT };
+
+    unsafe {
+        LAMBDA_COUNT += 1;
+    }
+
+    count
+}
+
 #[derive(Debug, Clone)]
 pub struct Lambda {
     parameters: Vec<Token>,
     body: Vec<Statement>,
-    closure: Rc<RefCell<Environment>>,
+    unique: u32,
+    closure: Env,
 }
 
 impl Lambda {
-    pub fn from_lambda(lambda: &LambdaExpression, closure: Rc<RefCell<Environment>>) -> Self {
+    pub fn from_lambda(lambda: &LambdaExpression, closure: Env) -> Self {
         Self {
             parameters: lambda.params.clone(),
             body: lambda.body.clone(),
+            unique: define_lambda(),
             closure,
         }
     }
 
-    pub fn from_function(
-        declaration: &FunctionStatement,
-        closure: Rc<RefCell<Environment>>,
-    ) -> Self {
+    pub fn from_function(declaration: &FunctionStatement, closure: Env) -> Self {
         Self {
             parameters: declaration.params.clone(),
             body: declaration.body.clone(),
+            unique: define_lambda(),
             closure,
         }
     }
@@ -138,7 +150,7 @@ impl Lambda {
 
 impl PartialEq for Lambda {
     fn eq(&self, other: &Self) -> bool {
-        self.parameters == other.parameters
+        self.unique == other.unique
     }
 }
 
@@ -146,7 +158,7 @@ impl Display for Lambda {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         write!(
             f,
-            "<Lambda({:?})>",
+            "<Lambda({})>",
             self.parameters
                 .iter()
                 .map(|token| token.lexeme.clone().to_string())
@@ -162,20 +174,36 @@ impl Callable for Lambda {
         interpreter: &mut super::interpreter::Interpreter,
         arguments: Vec<Literal>,
     ) -> super::error::Result<Literal> {
-        let mut env = Environment::new(Some(self.closure.clone()));
+        // let mut env = Environment::new(Some(self.closure.clone()));
+
+        interpreter
+            .scopes
+            .as_ref()
+            .borrow_mut()
+            .push_scope(self.closure.clone());
+        interpreter.scopes.as_ref().borrow_mut().scope_begin();
 
         for (i, param) in self.parameters.iter().enumerate() {
-            env.define(param.lexeme.clone(), arguments.get(i).unwrap().clone());
+            interpreter
+                .scopes
+                .as_ref()
+                .borrow_mut()
+                .define(param.lexeme.clone(), arguments.get(i).unwrap().clone());
         }
 
-        if let Err(e) = interpreter.execute_block_statement(&self.body, env.clone()) {
+        let return_value = if let Err(e) = interpreter.execute_block_statement(&self.body) {
             match e {
                 LoxError::Return { value } => Ok(value),
                 _ => Err(e),
             }
         } else {
             Ok(Literal::Nil)
-        }
+        };
+
+        interpreter.scopes.as_ref().borrow_mut().scope_end();
+        interpreter.scopes.as_ref().borrow_mut().scope_end();
+
+        return_value
     }
 
     fn parameter_num(&self) -> usize {
@@ -190,7 +218,7 @@ pub struct Function {
 }
 
 impl Function {
-    pub fn new(declaration: &FunctionStatement, closure: Rc<RefCell<Environment>>) -> Self {
+    pub fn new(declaration: &FunctionStatement, closure: Env) -> Self {
         Self {
             name: declaration.name.lexeme.clone(),
             lambda: Lambda::from_function(declaration, closure),
@@ -213,7 +241,7 @@ impl Display for Function {
 impl Callable for Function {
     fn call(
         &self,
-        interpreter: &mut super::interpreter::Interpreter,
+        interpreter: &mut Interpreter,
         arguments: Vec<Literal>,
     ) -> super::error::Result<Literal> {
         self.lambda.call(interpreter, arguments)

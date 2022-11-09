@@ -1,4 +1,4 @@
-use super::{token::Token, types::Literal, stmt::Statement};
+use super::{stmt::Statement, token::Token, types::Literal};
 use paste::paste;
 macro_rules! expr {
     ($($name: ident { $($attr: ident: $attr_type: ty), * }),* $(,)?) => {
@@ -44,9 +44,12 @@ macro_rules! expr {
                 }
             }
 
+            #[allow(unused)]
             pub trait Visitor<T, E> {
                 $(
-                    fn [<visit_ $name: snake>](&mut self, [<$name: snake>]: &$name) -> Result<T, E>;
+                    fn [<visit_ $name: snake>](&mut self, [<$name: snake>]: &$name) -> Result<T, E> {
+                        todo!()
+                    }
                 )*
             }
         }

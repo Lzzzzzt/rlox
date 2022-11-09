@@ -44,9 +44,12 @@ macro_rules! stmt {
                 }
             }
 
+            #[allow(unused)]
             pub trait Visitor<T, E> {
                 $(
-                    fn [<visit_ $name: snake>](&mut self, [<$name: snake>]: &$name) -> Result<T, E>;
+                    fn [<visit_ $name: snake>](&mut self, [<$name: snake>]: &$name) -> Result<T, E> {
+                        todo!()
+                    }
                 )*
             }
         }
@@ -57,7 +60,7 @@ stmt! {
     ExpressionStatement { expression: Expression },
     PrintStatement { expression: Expression },
     VarStatement { name: Token, initializer: Option<Expression> },
-    MultiVarStatement { vars: Vec<VarStatement> },
+    MultiVarStatement { vars: Vec<Statement> },
     BlockStatement { statements: Vec<Statement> },
     BranchStatement { condition: Expression, then_branch: Box<Statement>, else_branch: Option<Box<Statement>> },
     WhileStatement { condition: Expression, body: Box<Statement>, increment: Option<Box<Statement>> },

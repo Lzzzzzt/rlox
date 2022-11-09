@@ -1,4 +1,4 @@
-use std::{io, result, rc::Rc};
+use std::{io, rc::Rc, result};
 
 use super::{
     token::Token,

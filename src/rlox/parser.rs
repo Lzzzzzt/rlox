@@ -3,7 +3,7 @@ use std::vec;
 use super::error::LoxError::ParseError;
 use super::error::{LoxError, Result};
 use super::expr::Expression;
-use super::stmt::{self, Statement};
+use super::stmt::Statement;
 use super::token::Token;
 use super::types::TokenType;
 use super::types::{FuncType, Literal};
@@ -132,7 +132,7 @@ impl Parser {
             if self.match_one(TokenType::Equal) {
                 initializer = Some(self.ternary()?)
             }
-            vars.push(stmt::VarStatement::new(name, initializer));
+            vars.push(Statement::create_var_statement(name, initializer));
             if !self.check(TokenType::Semicolon) {
                 self.consume(TokenType::Comma, "Expect ',' after value")?;
             }

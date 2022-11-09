@@ -2,7 +2,7 @@ use std::{cell::RefCell, env, rc::Rc};
 
 use super::{
     callable::Callable,
-    environment::Environment,
+    environment::Scopes,
     error::{LoxError, Result},
     expr::{Expression, Visitor as ExprVisitor},
     stmt::{Statement, Visitor as StmtVisitor},
@@ -12,21 +12,18 @@ use super::{
 };
 
 pub struct Interpreter {
-    pub environment: Rc<RefCell<Environment>>,
-    pub global: Rc<RefCell<Environment>>,
+    pub scopes: Rc<RefCell<Scopes>>,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
-        let global = Rc::new(RefCell::new(Environment::new(None)));
         Self {
-            environment: global.clone(),
-            global,
+            scopes: Rc::new(RefCell::new(Scopes::new())),
         }
     }
 
-    pub fn interpret(&mut self, statements: Vec<Statement>) -> Result<()> {
-        for stmt in &statements {
+    pub fn interpret(&mut self, statements: &[Statement]) -> Result<()> {
+        for stmt in statements {
             self.execute(stmt)?;
         }
 
@@ -114,22 +111,26 @@ impl Interpreter {
         }
     }
 
-    pub fn execute_block_statement(
-        &mut self,
-        statements: &[Statement],
-        env: Environment,
-    ) -> Result<()> {
-        let pre = self.environment.clone();
-
-        self.environment = Rc::new(RefCell::new(env));
+    pub fn execute_block_statement_with_new_env(&mut self, statements: &[Statement]) -> Result<()> {
+        self.scopes.as_ref().borrow_mut().scope_begin();
 
         for stmt in statements {
             if let Err(e) = self.execute(stmt) {
-                self.environment = pre;
+                // self.environment = pre;
+                self.scopes.as_ref().borrow_mut().scope_end();
                 return Err(e);
             }
         }
-        self.environment = pre;
+
+        self.scopes.as_ref().borrow_mut().scope_end();
+
+        Ok(())
+    }
+
+    pub fn execute_block_statement(&mut self, statements: &[Statement]) -> Result<()> {
+        for stmt in statements {
+            self.execute(stmt)?;
+        }
 
         Ok(())
     }
@@ -142,7 +143,12 @@ impl ExprVisitor<Literal, LoxError> for Interpreter {
         assign_expression: &super::expr::AssignExpression,
     ) -> Result<Literal> {
         let value = self.evaluate(&assign_expression.value)?;
-        self.environment
+        // self.environment
+        //     .borrow_mut()
+        //     .assign(&assign_expression.name, value.clone())?;
+
+        self.scopes
+            .as_ref()
             .borrow_mut()
             .assign(&assign_expression.name, value.clone())?;
         Ok(value)
@@ -373,7 +379,8 @@ impl ExprVisitor<Literal, LoxError> for Interpreter {
         &mut self,
         variable_expression: &super::expr::VariableExpression,
     ) -> Result<Literal> {
-        self.environment.borrow_mut().get(&variable_expression.name)
+        // self.environment.borrow_mut().get(&variable_expression.name)
+        self.scopes.borrow_mut().get(&variable_expression.name)
     }
 
     fn visit_lambda_expression(
@@ -382,7 +389,8 @@ impl ExprVisitor<Literal, LoxError> for Interpreter {
     ) -> Result<Literal, LoxError> {
         Ok(Literal::Lambda(Rc::new(Lambda::from_lambda(
             lambda_expression,
-            self.environment.clone(),
+            // self.environment.clone(),
+            self.scopes.as_ref().borrow().current(),
         ))))
     }
 }
@@ -413,11 +421,17 @@ impl StmtVisitor<(), LoxError> for Interpreter {
     fn visit_var_statement(&mut self, var_statement: &super::stmt::VarStatement) -> Result<()> {
         if var_statement.initializer.is_some() {
             let value = self.evaluate(var_statement.initializer.as_ref().unwrap())?;
-            self.environment
+            // self.environment
+            //     .borrow_mut()
+            //     .define(var_statement.name.lexeme.clone(), value)
+            self.scopes
                 .borrow_mut()
                 .define(var_statement.name.lexeme.clone(), value)
         } else {
-            self.environment
+            // self.environment
+            //     .borrow_mut()
+            //     .define(var_statement.name.lexeme.clone(), Literal::Nil)
+            self.scopes
                 .borrow_mut()
                 .define(var_statement.name.lexeme.clone(), Literal::Nil)
         }
@@ -429,9 +443,9 @@ impl StmtVisitor<(), LoxError> for Interpreter {
         &mut self,
         block_statement: &super::stmt::BlockStatement,
     ) -> Result<()> {
-        self.execute_block_statement(
+        self.execute_block_statement_with_new_env(
             &block_statement.statements,
-            Environment::new(Some(self.environment.clone())),
+            // Environment::new(Some(self.environment.clone())),
         )
     }
 
@@ -440,7 +454,7 @@ impl StmtVisitor<(), LoxError> for Interpreter {
         multi_var_statement: &super::stmt::MultiVarStatement,
     ) -> Result<()> {
         for var in &multi_var_statement.vars {
-            self.visit_var_statement(var)?;
+            self.execute(var)?;
         }
         Ok(())
     }
@@ -510,9 +524,14 @@ impl StmtVisitor<(), LoxError> for Interpreter {
     ) -> Result<(), LoxError> {
         let func = Literal::Func(Rc::new(Function::new(
             function_statement,
-            self.environment.clone(),
+            // self.environment.clone(),
+            self.scopes.borrow().current(),
         )));
-        self.environment
+
+        // self.environment
+        //     .borrow_mut()
+        //     .define(function_statement.name.lexeme.clone(), func);
+        self.scopes
             .borrow_mut()
             .define(function_statement.name.lexeme.clone(), func);
 

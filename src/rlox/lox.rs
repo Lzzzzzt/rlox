@@ -82,7 +82,7 @@ impl Lox {
         let mut parser = Parser::new(scanner.tokens);
 
         match parser.parse() {
-            Ok(expression) => match self.interpreter.interpret(expression) {
+            Ok(expression) => match self.interpreter.interpret(&expression) {
                 Ok(value) => value,
                 Err(err) => Self::error(err),
             },
