@@ -2,12 +2,8 @@ func fib(n) {
     if (n < 2) {
         return n;
     }
-
     return fib(n - 1) + fib(n - 2);
 }
 
-print fib(40);
-
-for (let i = 0; i < 10; i = i + 1) {
-    print i;
-}
+#[static]
+fib(30);
