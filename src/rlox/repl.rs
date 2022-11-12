@@ -37,7 +37,10 @@ pub struct Repl {
 
 impl Repl {
     pub fn new() -> Self {
-        let config = Config::builder().build();
+        let config = Config::builder()
+            .indent_size(8)
+            .auto_add_history(true)
+            .build();
         let helper = MyHelper {
             colored_prompt: "".to_owned(),
             validator: MatchingBracketValidator::new(),
@@ -45,7 +48,7 @@ impl Repl {
         let mut editor = Editor::with_config(config).unwrap();
 
         editor.set_helper(Some(helper));
-        editor.bind_sequence(KeyEvent::from('\t'), Cmd::Insert(1, "    ".into()));
+        editor.bind_sequence(KeyEvent::from('\t'), Cmd::Insert(1, "\t".into()));
 
         Self { editor }
     }
@@ -55,7 +58,7 @@ impl Repl {
         let mut interpreter = Interpreter::new();
 
         loop {
-            let p = format!("[{count:2}]>>> ");
+            let p = format!("[{count:4}]: ");
             self.editor.helper_mut().unwrap().colored_prompt = format!("\x1b[1;32m{p}\x1b[0m");
             let readline = self.editor.readline(&p);
 

@@ -4,3 +4,8 @@ pub trait Callable {
     fn call(&self, interpreter: &mut Interpreter, arguments: Vec<Literal>) -> Result<Literal>;
     fn parameter_num(&self) -> usize;
 }
+
+pub trait CallableMut {
+    fn call(&mut self, interpreter: &mut Interpreter, arguments: Vec<Literal>) -> Result<Literal>;
+    fn parameter_num(&self) -> usize;
+}

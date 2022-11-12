@@ -1,4 +1,4 @@
-use super::{expr::Expression, token::Token};
+use super::{expr::Expression, token::Token, types::FuncType};
 use paste::paste;
 macro_rules! stmt {
     ($($name: ident { $($attr: ident: $attr_type: ty), * }),* $(,)?) => {
@@ -66,6 +66,7 @@ stmt! {
     WhileStatement { condition: Expression, body: Box<Statement>, increment: Option<Box<Statement>> },
     ContinueStatement { token: Token },
     BreakStatement { token: Token },
-    FunctionStatement { name: Token, params: Vec<Token>, body: Vec<Statement> },
+    FunctionStatement { name: Token, params: Vec<Token>, body: Vec<Statement>, function_type: FuncType },
     ReturnStatement { key_word: Token, value: Option<Expression> },
+    ClassStatement { name: Token, methods: Vec<Statement>, static_methods: Vec<Statement> }
 }

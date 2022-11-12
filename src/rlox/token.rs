@@ -21,12 +21,13 @@ lazy_static! {
         ("print", TokenType::Print),
         ("return", TokenType::Return),
         ("super", TokenType::Super),
-        ("this", TokenType::This),
+        ("self", TokenType::RSelf),
         ("true", TokenType::True),
         ("let", TokenType::Let),
         ("while", TokenType::While),
         ("continue", TokenType::Continue),
-        ("break", TokenType::Break)
+        ("break", TokenType::Break),
+        ("#[static]", TokenType::Static)
     ]);
 }
 
@@ -65,19 +66,6 @@ impl Token {
 
 impl Display for Token {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self.literal {
-            None => {
-                write!(f, "{:?} {}", self.token_type, self.lexeme)
-            }
-            Some(_) => {
-                write!(
-                    f,
-                    "{:?} {} {:?}",
-                    self.token_type,
-                    self.lexeme,
-                    self.literal.as_ref().unwrap()
-                )
-            }
-        }
+        write!(f, "{}", self.lexeme)
     }
 }

@@ -5,6 +5,7 @@ use std::time::SystemTime;
 
 use super::parser::Parser;
 use super::repl;
+use super::resolver::Resolver;
 use super::scanner::Scanner;
 use super::token::Token;
 use super::types::TokenType;
@@ -31,6 +32,8 @@ pub struct Lox;
 
 impl Lox {
     pub fn run_file(path: PathBuf) -> Result<(), LoxError> {
+        std::env::set_var("RLOX_RUN_MODE", "F");
+
         let string = read_to_string(path)?;
 
         let mut scanner = Scanner::new(string);
@@ -52,6 +55,7 @@ impl Lox {
     }
 
     pub fn run_prompt() -> Result<(), LoxError> {
+        std::env::set_var("RLOX_RUN_MODE", "R");
         let mut repl = repl::Repl::new();
         repl.run(Self::run);
         Ok(())
@@ -61,10 +65,14 @@ impl Lox {
         let start = SystemTime::now();
 
         let mut parser = Parser::new(tokens);
+        let mut resolver = Resolver::new();
 
         match parser.parse() {
-            Ok(expression) => match interpreter.interpret(&expression) {
-                Ok(value) => value,
+            Ok(statements) => match resolver.resolve(&statements) {
+                Ok(_) => match interpreter.interpret(&statements) {
+                    Ok(value) => value,
+                    Err(err) => Self::error(err),
+                },
                 Err(err) => Self::error(err),
             },
             Err(err) => {
@@ -74,10 +82,12 @@ impl Lox {
             }
         }
 
-        println!(
-            "Total Cost {}ms",
-            SystemTime::now().duration_since(start).unwrap().as_micros() as f64 / 1000.0
-        );
+        if std::env::var("RLOX_RUN_MODE").unwrap() == "R" {
+            println!(
+                "\x1b[1;90m[TIME]: \x1b[0m{}ms",
+                SystemTime::now().duration_since(start).unwrap().as_micros() as f64 / 1000.0
+            );
+        }
     }
 
     pub fn error(error: LoxError) {
@@ -121,15 +131,12 @@ impl Lox {
     fn report(line: (usize, usize), err_pos: &str, msg: &str) {
         let err_msg = if err_pos.is_empty() {
             if line != (0, 0) {
-                format!("[row:{:3}, col:{:3}] LoxError: {msg}", line.0, line.1)
+                format!("[{:2}, {:2}] LoxError: {msg}", line.0, line.1)
             } else {
                 format!("[----------------] LoxError: {msg}")
             }
         } else if line != (0, 0) {
-            format!(
-                "[row:{:3}, col:{:3}] LoxError {err_pos}: {msg}",
-                line.0, line.1
-            )
+            format!("[{:2},{:2}] LoxError {err_pos}: {msg}", line.0, line.1)
         } else {
             format!("[----------------] LoxError {err_pos}: {msg}")
         };

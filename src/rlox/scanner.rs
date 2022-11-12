@@ -40,7 +40,7 @@ impl Scanner {
         self.tokens.push(Token::new(
             TokenType::Eof,
             "".into(),
-            (self.line, self.start),
+            (self.line, self.start + 1),
         ));
 
         Ok(())
@@ -62,6 +62,7 @@ impl Scanner {
             '-' => self.add_token(TokenType::Minus),
             '*' => self.add_token(TokenType::Star),
             ';' => self.add_token(TokenType::Semicolon),
+            '%' => self.add_token(TokenType::Mod),
             '!' => {
                 let token = if self.expected('=') {
                     self.advance();
@@ -108,6 +109,7 @@ impl Scanner {
                     self.add_token(TokenType::Slash);
                 }
             }
+            '#' => self.parse_modifier()?,
             ' ' | '\r' | '\t' => (),
             '\n' => self.line += 1,
             '"' => self.parse_string()?,
@@ -118,12 +120,44 @@ impl Scanner {
                     self.parse_identifier();
                 } else {
                     return Err(LoxError::ParseTokenError {
-                        position: (self.line, self.start),
+                        position: (self.line, self.start + 1),
                         msg: "Unexpected character.",
                     });
                 }
             }
         }
+        Ok(())
+    }
+
+    fn parse_modifier(&mut self) -> Result<(), LoxError> {
+        self.advance();
+        while self.nth(0) != ']' && !self.is_at_end() {
+            self.advance();
+        }
+
+        if self.is_at_end() {
+            return Err(LoxError::ParseTokenError {
+                position: (self.line, self.start + 1),
+                msg: "Unterminated Modifier.",
+            });
+        }
+
+        self.advance();
+
+        let text = &self.source[self.start..self.current];
+
+        let token_type = KEYWORD_MAP.get(text);
+
+        match token_type {
+            None => {
+                return Err(LoxError::ParseTokenError {
+                    position: (self.line, self.start + 1),
+                    msg: "Unknown modifier",
+                })
+            }
+            Some(token_type) => self.add_token(*token_type),
+        }
+
         Ok(())
     }
 
@@ -137,7 +171,7 @@ impl Scanner {
 
         if self.is_at_end() {
             return Err(LoxError::ParseTokenError {
-                position: (self.line, self.start),
+                position: (self.line, self.start + 1),
                 msg: "Unterminated String.",
             });
         }
@@ -217,17 +251,33 @@ impl Scanner {
 
     fn add_token(&mut self, token_type: TokenType) {
         let text = &self.source[self.start..self.current];
-        self.tokens
-            .push(Token::new(token_type, text.into(), (self.line, self.start)));
+        let pre_lines_len = self.source.split('\n').collect::<Vec<&str>>()[0..self.line - 1]
+            .iter()
+            .map(|v| v.len() + 1)
+            .reduce(|pre, cur| pre + cur)
+            .unwrap_or(0);
+
+        self.tokens.push(Token::new(
+            token_type,
+            text.into(),
+            (self.line, self.start - pre_lines_len),
+        ));
     }
 
     fn add_token_with_literal(&mut self, token_type: TokenType, literal: Literal) {
         let text = &self.source[self.start..self.current];
+
+        let pre_lines_len = self.source.split('\n').collect::<Vec<&str>>()[0..self.line - 1]
+            .iter()
+            .map(|v| v.len())
+            .reduce(|pre, cur| pre + cur)
+            .unwrap_or(0);
+
         self.tokens.push(Token::with_literal(
             token_type,
             text.into(),
             Some(literal),
-            (self.line, self.start),
+            (self.line, self.start - pre_lines_len),
         ));
     }
 }

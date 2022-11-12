@@ -51,7 +51,22 @@ impl Parser {
             };
         }
         if self.match_one(TokenType::Func) {
-            return match self.function(FuncType::Normal) {
+            let function_type = if self.check(TokenType::Identifier) {
+                FuncType::Normal
+            } else {
+                FuncType::Lambda
+            };
+
+            return match self.function(function_type) {
+                Ok(stmt) => Ok(stmt),
+                Err(err) => {
+                    self.synchronize();
+                    Err(err)
+                }
+            };
+        }
+        if self.match_one(TokenType::Class) {
+            return match self.class() {
                 Ok(stmt) => Ok(stmt),
                 Err(err) => {
                     self.synchronize();
@@ -67,6 +82,37 @@ impl Parser {
                 Err(err)
             }
         }
+    }
+
+    fn class(&mut self) -> Result<Statement> {
+        let class_name = self.consume(TokenType::Identifier, "Expect a class name")?;
+        self.consume(
+            TokenType::LeftBrace,
+            format!("Expect `{{` after `{}`", class_name.lexeme).as_str(),
+        )?;
+
+        let mut methods = vec![];
+        let mut static_methods = vec![];
+
+        while !self.check(TokenType::RightBrace) && !self.is_at_end() {
+            if self.check(TokenType::Static) {
+                self.advance();
+                static_methods.push(self.function(FuncType::StaticMethod)?)
+            } else {
+                methods.push(self.function(FuncType::Method)?)
+            }
+        }
+
+        self.consume(
+            TokenType::RightBrace,
+            format!("Expect `}}` after `{} {{ ... }}`", class_name.lexeme).as_str(),
+        )?;
+
+        Ok(Statement::create_class_statement(
+            class_name,
+            methods,
+            static_methods,
+        ))
     }
 
     fn function_params_and_body(&mut self) -> Result<(Vec<Token>, Vec<Statement>)> {
@@ -99,27 +145,36 @@ impl Parser {
     }
 
     fn function(&mut self, kind: FuncType) -> Result<Statement> {
-        if self.check(TokenType::LeftParen) {
-            self.consume(TokenType::LeftParen, "Expect '(' after func.")?;
+        match kind {
+            FuncType::Normal | FuncType::Method | FuncType::StaticMethod => {
+                let name = self.consume(
+                    TokenType::Identifier,
+                    format!("Expect {} name.", kind).as_str(),
+                )?;
 
-            let (params, body) = self.function_params_and_body()?;
+                self.consume(
+                    TokenType::LeftParen,
+                    format!("Expect '(' after {} name.", kind).as_str(),
+                )?;
+                let (params, body) = self.function_params_and_body()?;
 
-            let lambda = Expression::create_lambda_expression(params, body);
+                Ok(Statement::create_function_statement(
+                    name, params, body, kind,
+                ))
+            }
+            FuncType::Lambda => {
+                self.consume(TokenType::LeftParen, "Expect '(' after lambda.")?;
 
-            Ok(Statement::create_expression_statement(lambda))
-        } else {
-            let name = self.consume(
-                TokenType::Identifier,
-                format!("Expect {} name.", kind).as_str(),
-            )?;
+                let (params, body) = self.function_params_and_body()?;
 
-            self.consume(
-                TokenType::LeftParen,
-                format!("Expect '(' after {} name.", kind).as_str(),
-            )?;
-            let (params, body) = self.function_params_and_body()?;
+                let lambda = Expression::create_lambda_expression(params, body);
 
-            Ok(Statement::create_function_statement(name, params, body))
+                Ok(Statement::create_expression_statement(lambda))
+            }
+            _ => Err(LoxError::create_runtime_error(
+                self.peek(),
+                format!("is this a function({})?", self.peek()),
+            )),
         }
     }
 
@@ -294,7 +349,10 @@ impl Parser {
     fn print_statement(&mut self) -> Result<Statement> {
         let value = self.expression()?;
 
-        self.consume(TokenType::Semicolon, "Expect ';' after value")?;
+        self.consume(
+            TokenType::Semicolon,
+            format!("Expect ';' after {}", value).as_str(),
+        )?;
 
         Ok(Statement::create_print_statement(value))
     }
@@ -302,7 +360,10 @@ impl Parser {
     fn expression_statement(&mut self) -> Result<Statement> {
         let expr = self.expression()?;
 
-        self.consume(TokenType::Semicolon, "Expect ';' after value")?;
+        self.consume(
+            TokenType::Semicolon,
+            format!("Expect ';' after {}", expr).as_str(),
+        )?;
 
         Ok(Statement::create_expression_statement(expr))
     }
@@ -315,8 +376,16 @@ impl Parser {
             let value = self.assignment()?;
 
             if let Expression::VariableExpression(e) = expr {
-                let name = e.name;
-                return Ok(Expression::create_assign_expression(name, Box::new(value)));
+                return Ok(Expression::create_assign_expression(
+                    e.name,
+                    Box::new(value),
+                ));
+            } else if let Expression::GetExpression(g) = expr {
+                return Ok(Expression::create_set_expression(
+                    g.object,
+                    g.name,
+                    Box::new(value),
+                ));
             }
 
             return Err(LoxError::create_runtime_error(
@@ -428,7 +497,7 @@ impl Parser {
     fn factor(&mut self) -> Result<Expression> {
         let mut expr = self.unary();
 
-        while self.match_many(vec![TokenType::Star, TokenType::Slash]) {
+        while self.match_many(vec![TokenType::Star, TokenType::Slash, TokenType::Mod]) {
             let op = self.previous();
             let right = self.unary();
             expr = Ok(Expression::create_binary_expression(
@@ -452,20 +521,24 @@ impl Parser {
     }
 
     fn call(&mut self) -> Result<Expression> {
-        let callee = self.primary()?;
+        let mut callee = self.primary()?;
 
-        if self.match_one(TokenType::LeftParen) {
-            let args = self.arguments()?;
-            let paren = self.consume(TokenType::RightParen, "Expect ')' after arguments")?;
+        loop {
+            if self.match_one(TokenType::LeftParen) {
+                let args = self.arguments()?;
+                let paren = self.consume(TokenType::RightParen, "Expect ')' after arguments")?;
 
-            Ok(Expression::create_call_expression(
-                Box::new(callee),
-                paren,
-                args,
-            ))
-        } else {
-            Ok(callee)
+                callee = Expression::create_call_expression(Box::new(callee), paren, args);
+            } else if self.match_one(TokenType::Dot) {
+                let name =
+                    self.consume(TokenType::Identifier, "Expect property name after '.'.")?;
+                callee = Expression::create_get_expression(Box::new(callee), name)
+            } else {
+                break;
+            }
         }
+
+        Ok(callee)
     }
 
     fn arguments(&mut self) -> Result<Vec<Expression>> {
@@ -512,14 +585,20 @@ impl Parser {
         } else if self.match_one(TokenType::Identifier) {
             Ok(Expression::create_variable_expression(self.previous()))
         } else if self.match_one(TokenType::LeftParen) {
-            let expr = self.expression();
-            self.consume(TokenType::RightParen, "Expect ')' after expression.")?;
-            Ok(Expression::create_grouping_expression(Box::new(expr?)))
+            let expr = self.expression()?;
+            self.consume(
+                TokenType::RightParen,
+                format!("Expect ')' after {}.", expr).as_str(),
+            )?;
+            Ok(Expression::create_grouping_expression(Box::new(expr)))
         } else if self.match_one(TokenType::Func) {
             Ok(self.lambda()?)
+        } else if self.match_one(TokenType::RSelf) {
+            Ok(Expression::create_self_expression(self.previous()))
         } else {
             use TokenType::{
                 BangEqual, Comma, EqualEqual, Greater, GreaterEqual, Less, LessEqual, Slash, Star,
+                Static,
             };
             let token = self.peek();
 
@@ -529,7 +608,11 @@ impl Parser {
                     token,
                     format!("Expect a expression before '{}'", token.lexeme).as_str(),
                 )),
-                _ => Err(Self::error(token, "Expect expression.")),
+                Static => Err(Self::error(
+                    token,
+                    format!("Modifier `{}` can only be used in class", token.lexeme).as_str(),
+                )),
+                _ => Err(Self::error(token, "Unexpected expression.")),
             }
         }
     }

@@ -1,21 +1,28 @@
 use std::{
+    cell::RefCell,
+    collections::HashMap,
     fmt::{Display, Formatter},
     rc::Rc,
 };
 
 use super::{
-    callable::Callable,
+    callable::{Callable, CallableMut},
     environment::Env,
-    error::LoxError,
+    error::{LoxError, Result},
     expr::LambdaExpression,
     interpreter::Interpreter,
     stmt::{FunctionStatement, Statement},
     token::Token,
 };
-#[allow(dead_code)]
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FuncType {
+    None,
     Normal,
     Method,
+    Lambda,
+    StaticMethod,
+    Initializer,
 }
 impl Display for FuncType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
@@ -24,13 +31,31 @@ impl Display for FuncType {
             "{}",
             match self {
                 FuncType::Normal => "Function",
-                FuncType::Method => "Method",
+                FuncType::Method | FuncType::Initializer => "Method",
+                FuncType::Lambda => "Lambda",
+                FuncType::None => "",
+                FuncType::StaticMethod => "StaticMethod",
             }
         )
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClassType {
+    None,
+    Class,
+}
+
+impl Display for ClassType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ClassType::None => write!(f, ""),
+            ClassType::Class => write!(f, "Class"),
+        }
+    }
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum TokenType {
     // 单字符标记
     Colon,
@@ -46,6 +71,7 @@ pub enum TokenType {
     Semicolon,
     Slash,
     Star,
+    Mod,
 
     // 单或双字符标记
     Bang,
@@ -75,12 +101,13 @@ pub enum TokenType {
     Print,
     Return,
     Super,
-    This,
+    RSelf,
     True,
     Let,
     While,
     Continue,
     Break,
+    Static,
 
     Eof,
 }
@@ -90,8 +117,10 @@ pub enum Literal {
     String(Rc<String>),
     Number(f64),
     Bool(bool),
-    Func(Rc<Function>),
-    Lambda(Rc<Lambda>),
+    Func(Function),
+    Lambda(Lambda),
+    Class(Class),
+    Instance(Instance),
     Nil,
 }
 
@@ -104,6 +133,8 @@ impl Display for Literal {
             Literal::Bool(b) => write!(f, "{}", b),
             Literal::Nil => write!(f, "Nil"),
             Literal::Lambda(l) => write!(f, "{}", l),
+            Literal::Class(c) => write!(f, "{}", c),
+            Literal::Instance(i) => write!(f, "{}", i),
         }
     }
 }
@@ -122,17 +153,17 @@ fn define_lambda() -> u32 {
 
 #[derive(Debug, Clone)]
 pub struct Lambda {
-    parameters: Vec<Token>,
-    body: Vec<Statement>,
-    unique: u32,
-    closure: Env,
+    pub parameters: Rc<Vec<Token>>,
+    pub body: Rc<Vec<Statement>>,
+    pub unique: u32,
+    pub closure: Env,
 }
 
 impl Lambda {
     pub fn from_lambda(lambda: &LambdaExpression, closure: Env) -> Self {
         Self {
-            parameters: lambda.params.clone(),
-            body: lambda.body.clone(),
+            parameters: Rc::new(lambda.params.clone()),
+            body: Rc::new(lambda.body.clone()),
             unique: define_lambda(),
             closure,
         }
@@ -140,8 +171,8 @@ impl Lambda {
 
     pub fn from_function(declaration: &FunctionStatement, closure: Env) -> Self {
         Self {
-            parameters: declaration.params.clone(),
-            body: declaration.body.clone(),
+            parameters: Rc::new(declaration.params.clone()),
+            body: Rc::new(declaration.body.clone()),
             unique: define_lambda(),
             closure,
         }
@@ -161,7 +192,7 @@ impl Display for Lambda {
             "<Lambda({})>",
             self.parameters
                 .iter()
-                .map(|token| token.lexeme.clone().to_string())
+                .map(|token| token.lexeme.to_string())
                 .collect::<Vec<String>>()
                 .join(", ")
         )
@@ -213,15 +244,33 @@ impl Callable for Lambda {
 
 #[derive(Clone, Debug)]
 pub struct Function {
-    name: Rc<String>,
+    pub name: Rc<String>,
     lambda: Lambda,
+    is_initializer: bool,
 }
 
 impl Function {
-    pub fn new(declaration: &FunctionStatement, closure: Env) -> Self {
+    pub fn new(declaration: &FunctionStatement, closure: Env, is_initializer: bool) -> Self {
         Self {
             name: declaration.name.lexeme.clone(),
             lambda: Lambda::from_function(declaration, closure),
+            is_initializer,
+        }
+    }
+
+    pub fn bind(&self, instance: Instance) -> Self {
+        let env = Rc::new(RefCell::new(self.lambda.closure.as_ref().borrow().clone()));
+        env.as_ref()
+            .borrow_mut()
+            .insert(Rc::new(String::from("self")), Literal::Instance(instance));
+
+        let mut lambda = self.lambda.clone();
+        lambda.closure = env;
+
+        Self {
+            name: self.name.clone(),
+            lambda,
+            is_initializer: self.is_initializer,
         }
     }
 }
@@ -244,10 +293,171 @@ impl Callable for Function {
         interpreter: &mut Interpreter,
         arguments: Vec<Literal>,
     ) -> super::error::Result<Literal> {
-        self.lambda.call(interpreter, arguments)
+        if self.is_initializer {
+            self.lambda.call(interpreter, arguments)?;
+            Ok(self
+                .lambda
+                .closure
+                .as_ref()
+                .borrow()
+                .get(&Rc::new(String::from("self")))
+                .unwrap()
+                .clone())
+        } else {
+            self.lambda.call(interpreter, arguments)
+        }
     }
 
     fn parameter_num(&self) -> usize {
         self.lambda.parameter_num()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Class {
+    name: Rc<String>,
+    methods: Rc<RefCell<HashMap<Rc<String>, Literal>>>,
+    static_methods: Rc<RefCell<HashMap<Rc<String>, Literal>>>,
+    instance_num: Rc<RefCell<u32>>,
+}
+
+impl Class {
+    pub fn new(
+        name: Rc<String>,
+        methods: HashMap<Rc<String>, Literal>,
+        static_methods: HashMap<Rc<String>, Literal>,
+    ) -> Self {
+        Self {
+            name,
+            methods: Rc::new(RefCell::new(methods)),
+            instance_num: Rc::new(RefCell::new(0)),
+            static_methods: Rc::new(RefCell::new(static_methods)),
+        }
+    }
+
+    pub fn get_static_method(&self, name: &Token) -> Result<Literal> {
+        match self.static_methods.as_ref().borrow().get(&name.lexeme) {
+            Some(value) => {
+                if let Literal::Func(f) = value {
+                    Ok(Literal::Func(f.clone()))
+                } else {
+                    Err(LoxError::create_runtime_error(
+                        name,
+                        format!("Undefined static method '{}'", name.lexeme),
+                    ))
+                }
+            }
+            None => Err(LoxError::create_runtime_error(
+                name,
+                format!("Undefined static method '{}'", name.lexeme),
+            )),
+        }
+    }
+}
+
+impl Display for Class {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<Class {}>", self.name)
+    }
+}
+
+impl PartialEq for Class {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+
+impl CallableMut for Class {
+    fn call(
+        &mut self,
+        interpreter: &mut Interpreter,
+        arguments: Vec<Literal>,
+    ) -> super::error::Result<Literal> {
+        let instance = Instance::new(self.clone(), *self.instance_num.as_ref().borrow());
+        *self.instance_num.as_ref().borrow_mut() += 1;
+
+        let init_fn_id = Rc::new(String::from("__init__"));
+
+        if self.methods.as_ref().borrow().contains_key(&init_fn_id) {
+            let methods = self.methods.as_ref().borrow();
+            let init = methods.get(&init_fn_id).unwrap();
+            if let Literal::Func(init_fn) = init {
+                return init_fn.bind(instance).call(interpreter, arguments);
+            }
+        }
+
+        Ok(Literal::Instance(instance))
+    }
+
+    fn parameter_num(&self) -> usize {
+        let init_fn_id = Rc::new(String::from("__init__"));
+
+        if self.methods.as_ref().borrow().contains_key(&init_fn_id) {
+            let methods = self.methods.as_ref().borrow();
+            let init = methods.get(&init_fn_id).unwrap();
+            if let Literal::Func(init_fn) = init {
+                return init_fn.parameter_num();
+            }
+        }
+
+        0
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Instance {
+    id: u32,
+    class: Class,
+    attribute: Rc<RefCell<HashMap<Rc<String>, Literal>>>,
+}
+
+impl Instance {
+    pub fn new(class: Class, id: u32) -> Self {
+        Self {
+            class,
+            id,
+            attribute: Rc::new(RefCell::new(HashMap::new())),
+        }
+    }
+
+    pub fn get(&self, name: &Token) -> Result<Literal> {
+        match self.attribute.as_ref().borrow_mut().get(&name.lexeme) {
+            Some(value) => Ok(value.clone()),
+            None => match self.class.methods.as_ref().borrow().get(&name.lexeme) {
+                Some(value) => {
+                    if let Literal::Func(f) = value {
+                        Ok(Literal::Func(f.bind(self.clone())))
+                    } else {
+                        Err(LoxError::create_runtime_error(
+                            name,
+                            format!("Undefined method '{}'", name.lexeme),
+                        ))
+                    }
+                }
+                None => Err(LoxError::create_runtime_error(
+                    name,
+                    format!("Undefined property '{}'", name.lexeme),
+                )),
+            },
+        }
+    }
+
+    pub fn set(&mut self, name: &Token, value: Literal) {
+        self.attribute
+            .as_ref()
+            .borrow_mut()
+            .insert(name.lexeme.clone(), value);
+    }
+}
+
+impl Display for Instance {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<Instance of `{}`>", self.class)
+    }
+}
+
+impl PartialEq for Instance {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id && self.class == other.class
     }
 }

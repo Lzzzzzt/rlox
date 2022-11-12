@@ -1,24 +1,30 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{
+    cell::RefCell,
+    collections::{HashMap, HashSet},
+    rc::Rc,
+};
 
 use super::{
-    callable::Callable,
+    callable::{Callable, CallableMut},
     environment::Scopes,
     error::{LoxError, Result},
     expr::{Expression, Visitor as ExprVisitor},
     stmt::{Statement, Visitor as StmtVisitor},
     token::Token,
-    types::{Function, Literal},
+    types::{Class, Function, Literal},
     types::{Lambda, TokenType},
 };
 
 pub struct Interpreter {
     pub scopes: Rc<RefCell<Scopes>>,
+    cache: LRUCache<Literal>,
 }
 
 impl Interpreter {
     pub fn new() -> Self {
         Self {
             scopes: Rc::new(RefCell::new(Scopes::new())),
+            cache: LRUCache::new(),
         }
     }
 
@@ -78,9 +84,10 @@ impl Interpreter {
     }
 
     #[inline]
-    fn get_func(&self, obj: &Literal, op: &Token) -> Result<Rc<Function>> {
+    #[allow(unused)]
+    fn get_func(&self, obj: &Literal, op: &Token) -> Result<Function> {
         if let Literal::Func(func) = obj {
-            return Ok(Rc::clone(func));
+            return Ok(func.clone());
         }
 
         Err(LoxError::create_runtime_error(
@@ -90,9 +97,10 @@ impl Interpreter {
     }
 
     #[inline]
-    fn get_lambda(&self, obj: &Literal, op: &Token) -> Result<Rc<Lambda>> {
+    #[allow(unused)]
+    fn get_lambda(&self, obj: &Literal, op: &Token) -> Result<Lambda> {
         if let Literal::Lambda(lambda) = obj {
-            return Ok(Rc::clone(lambda));
+            return Ok(lambda.clone());
         }
 
         Err(LoxError::create_runtime_error(
@@ -105,7 +113,7 @@ impl Interpreter {
     fn is_true(&self, obj: &Literal) -> bool {
         use Literal::*;
         match obj {
-            String(_) | Number(_) | Func(_) | Lambda(_) => true,
+            String(_) | Number(_) | Func(_) | Lambda(_) | Class(_) | Instance(_) => true,
             Bool(b) => *b,
             Nil => false,
         }
@@ -143,9 +151,6 @@ impl ExprVisitor<Literal, LoxError> for Interpreter {
         assign_expression: &super::expr::AssignExpression,
     ) -> Result<Literal> {
         let value = self.evaluate(&assign_expression.value)?;
-        // self.environment
-        //     .borrow_mut()
-        //     .assign(&assign_expression.name, value.clone())?;
 
         self.scopes
             .as_ref()
@@ -178,6 +183,17 @@ impl ExprVisitor<Literal, LoxError> for Interpreter {
                     ));
                 }
                 Ok(Literal::Number(left / right))
+            }
+            TokenType::Mod => {
+                let left = self.get_num(&left, op)? as i64;
+                let right = self.get_num(&right, op)? as i64;
+                if (right == 0) {
+                    return Err(LoxError::create_runtime_error(
+                        op,
+                        "divisor cannot be 0.".into(),
+                    ));
+                }
+                Ok(Literal::Number((left % right) as f64))
             }
             TokenType::Star => {
                 let left = self.get_num(&left, op)?;
@@ -236,10 +252,10 @@ impl ExprVisitor<Literal, LoxError> for Interpreter {
         &mut self,
         call_expression: &super::expr::CallExpression,
     ) -> Result<Literal> {
-        let callee = self.evaluate(&call_expression.callee)?;
+        let mut callee = self.evaluate(&call_expression.callee)?;
 
-        match self.get_func(&callee, &call_expression.paren) {
-            Ok(func) => {
+        match &mut callee {
+            Literal::Func(func) => {
                 let mut arguments = {
                     let mut a = vec![];
                     for arg in &call_expression.arguments {
@@ -259,11 +275,24 @@ impl ExprVisitor<Literal, LoxError> for Interpreter {
                     ));
                 }
 
-                func.call(self, arguments)
-            }
-            Err(e) => {
-                let mut lambda = self.get_lambda(&callee, &call_expression.paren)?;
+                let callee_id = format!(
+                    "{}({})",
+                    func.name,
+                    arguments
+                        .iter()
+                        .map(|v| v.to_string())
+                        .collect::<Vec<String>>()
+                        .join(", ")
+                );
 
+                if self.cache.contains_key(&callee_id) {
+                    return Ok(self.cache.get(&callee_id).unwrap().clone());
+                }
+                let res = func.call(self, arguments)?;
+                self.cache.insert(callee_id, res.clone());
+                Ok(res)
+            }
+            Literal::Lambda(lambda) => {
                 let mut arguments = {
                     let mut a = vec![];
                     for arg in &call_expression.arguments {
@@ -283,8 +312,49 @@ impl ExprVisitor<Literal, LoxError> for Interpreter {
                     ));
                 }
 
-                lambda.call(self, arguments)
+                let callee_id = format!(
+                    "{}({})",
+                    lambda.unique,
+                    arguments
+                        .iter()
+                        .map(|v| v.to_string())
+                        .collect::<Vec<String>>()
+                        .join(", ")
+                );
+
+                if self.cache.contains_key(&callee_id) {
+                    return Ok(self.cache.get(&callee_id).unwrap().clone());
+                }
+                let res = lambda.call(self, arguments)?;
+                self.cache.insert(callee_id, res.clone());
+                Ok(res)
             }
+            Literal::Class(class) => {
+                let mut arguments = {
+                    let mut a = vec![];
+                    for arg in &call_expression.arguments {
+                        a.push(self.evaluate(arg)?);
+                    }
+                    a
+                };
+
+                if arguments.len() != class.parameter_num() {
+                    return Err(LoxError::create_runtime_error(
+                        &call_expression.paren,
+                        format!(
+                            "Expect {} parameters, but got {}",
+                            class.parameter_num(),
+                            arguments.len()
+                        ),
+                    ));
+                }
+
+                class.call(self, arguments)
+            }
+            _ => Err(LoxError::create_runtime_error(
+                &call_expression.paren,
+                "Target must be callable.".into(),
+            )),
         }
     }
 
@@ -292,7 +362,18 @@ impl ExprVisitor<Literal, LoxError> for Interpreter {
         &mut self,
         get_expression: &super::expr::GetExpression,
     ) -> Result<Literal> {
-        todo!()
+        let obj = self.evaluate(&get_expression.object)?;
+
+        if let Literal::Instance(i) = obj {
+            i.get(&get_expression.name)
+        } else if let Literal::Class(c) = obj {
+            c.get_static_method(&get_expression.name)
+        } else {
+            Err(LoxError::create_runtime_error(
+                &get_expression.name,
+                "Only instances have property".into(),
+            ))
+        }
     }
 
     fn visit_grouping_expression(
@@ -326,7 +407,18 @@ impl ExprVisitor<Literal, LoxError> for Interpreter {
         &mut self,
         set_expression: &super::expr::SetExpression,
     ) -> Result<Literal> {
-        todo!()
+        let mut obj = self.evaluate(&set_expression.object)?;
+
+        if let Literal::Instance(mut i) = obj {
+            let value = self.evaluate(&set_expression.value)?;
+            i.set(&set_expression.name, value.clone());
+            return Ok(value);
+        }
+
+        Err(LoxError::create_runtime_error(
+            &set_expression.name,
+            "Only instances can set property".into(),
+        ))
     }
 
     fn visit_super_expression(
@@ -336,11 +428,11 @@ impl ExprVisitor<Literal, LoxError> for Interpreter {
         todo!()
     }
 
-    fn visit_this_expression(
+    fn visit_self_expression(
         &mut self,
-        this_expression: &super::expr::ThisExpression,
+        self_expression: &super::expr::SelfExpression,
     ) -> Result<Literal> {
-        todo!()
+        self.scopes.as_ref().borrow().get(&self_expression.keyword)
     }
 
     fn visit_ternary_expression(
@@ -379,7 +471,6 @@ impl ExprVisitor<Literal, LoxError> for Interpreter {
         &mut self,
         variable_expression: &super::expr::VariableExpression,
     ) -> Result<Literal> {
-        // self.environment.borrow_mut().get(&variable_expression.name)
         self.scopes.borrow_mut().get(&variable_expression.name)
     }
 
@@ -387,11 +478,10 @@ impl ExprVisitor<Literal, LoxError> for Interpreter {
         &mut self,
         lambda_expression: &super::expr::LambdaExpression,
     ) -> Result<Literal, LoxError> {
-        Ok(Literal::Lambda(Rc::new(Lambda::from_lambda(
+        Ok(Literal::Lambda(Lambda::from_lambda(
             lambda_expression,
-            // self.environment.clone(),
             self.scopes.as_ref().borrow().current(),
-        ))))
+        )))
     }
 }
 
@@ -409,23 +499,21 @@ impl StmtVisitor<(), LoxError> for Interpreter {
         print_statement: &super::stmt::PrintStatement,
     ) -> Result<()> {
         let value = self.evaluate(&print_statement.expression)?;
-        println!("{}", value);
+        if std::env::var("RLOX_RUN_MODE").unwrap() == "R" {
+            println!("\x1b[1;34m[REPL]: \x1b[0m{}", value);
+        } else {
+            println!("{}", value);
+        }
         Ok(())
     }
 
     fn visit_var_statement(&mut self, var_statement: &super::stmt::VarStatement) -> Result<()> {
         if var_statement.initializer.is_some() {
             let value = self.evaluate(var_statement.initializer.as_ref().unwrap())?;
-            // self.environment
-            //     .borrow_mut()
-            //     .define(var_statement.name.lexeme.clone(), value)
             self.scopes
                 .borrow_mut()
                 .define(var_statement.name.lexeme.clone(), value)
         } else {
-            // self.environment
-            //     .borrow_mut()
-            //     .define(var_statement.name.lexeme.clone(), Literal::Nil)
             self.scopes
                 .borrow_mut()
                 .define(var_statement.name.lexeme.clone(), Literal::Nil)
@@ -517,15 +605,12 @@ impl StmtVisitor<(), LoxError> for Interpreter {
         &mut self,
         function_statement: &super::stmt::FunctionStatement,
     ) -> Result<(), LoxError> {
-        let func = Literal::Func(Rc::new(Function::new(
+        let func = Literal::Func(Function::new(
             function_statement,
-            // self.environment.clone(),
             self.scopes.borrow().current(),
-        )));
+            false,
+        ));
 
-        // self.environment
-        //     .borrow_mut()
-        //     .define(function_statement.name.lexeme.clone(), func);
         self.scopes
             .borrow_mut()
             .define(function_statement.name.lexeme.clone(), func);
@@ -544,5 +629,109 @@ impl StmtVisitor<(), LoxError> for Interpreter {
         };
 
         Err(LoxError::create_return(value))
+    }
+
+    fn visit_class_statement(
+        &mut self,
+        class_statement: &super::stmt::ClassStatement,
+    ) -> Result<(), LoxError> {
+        self.scopes
+            .as_ref()
+            .borrow_mut()
+            .define(class_statement.name.lexeme.clone(), Literal::Nil);
+        let mut methods = HashMap::new();
+
+        for method in &class_statement.methods {
+            if let Statement::FunctionStatement(method) = method {
+                let m = Literal::Func(Function::new(
+                    method,
+                    self.scopes.borrow().current(),
+                    method.name.lexeme.as_ref().eq("__init__"),
+                ));
+                methods.insert(method.name.lexeme.clone(), m);
+            }
+        }
+
+        let mut static_methods = HashMap::new();
+
+        for s_methods in &class_statement.static_methods {
+            if let Statement::FunctionStatement(method) = s_methods {
+                let m = Literal::Func(Function::new(
+                    method,
+                    self.scopes.borrow().current(),
+                    method.name.lexeme.as_ref().eq("__init__"),
+                ));
+                static_methods.insert(method.name.lexeme.clone(), m);
+            }
+        }
+
+        let class = Literal::Class(Class::new(
+            class_statement.name.lexeme.clone(),
+            methods,
+            static_methods,
+        ));
+        self.scopes
+            .as_ref()
+            .borrow_mut()
+            .assign(&class_statement.name, class)?;
+
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+struct LRUCache<T> {
+    cache: HashMap<String, (T, usize)>,
+    count: u32,
+}
+
+impl<T> LRUCache<T> {
+    fn new() -> Self {
+        Self {
+            count: 0,
+            cache: HashMap::with_capacity(512),
+        }
+    }
+
+    fn get(&mut self, key: &String) -> Option<&T> {
+        self.clean(key);
+
+        let value = match self.cache.get_mut(key) {
+            Some(value) => {
+                self.count += 1;
+                value.1 += 1;
+                Some(&value.0)
+            }
+            None => None,
+        };
+
+        value
+    }
+
+    fn insert(&mut self, key: String, value: T) {
+        self.clean(&key);
+        self.count += 1;
+        self.cache.insert(key, (value, 0));
+    }
+
+    fn contains_key(&self, key: &String) -> bool {
+        self.cache.contains_key(key)
+    }
+
+    fn clean(&mut self, key: &String) {
+        if self.count % 10 == 0 && self.cache.len() > 500 {
+            let mut used = self.cache.iter().collect::<Vec<(&String, &(T, usize))>>();
+            let len = self.cache.len();
+            used.sort_by(|a, b| a.1 .1.cmp(&b.1 .1));
+
+            let less_used = used
+                .iter()
+                .enumerate()
+                .filter(|(i, &(k, _))| i < &(len / 10) && k != key)
+                .map(|(_, &(k, _))| k.to_string())
+                .collect::<HashSet<String>>();
+
+            self.cache.retain(|k, _| !less_used.contains(k))
+        }
     }
 }
