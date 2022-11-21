@@ -1,9 +1,3 @@
-let x = "global";
-func outer() {
-  let x = "outer";
-  func inner() {
-    print x;
-  }
-  inner();
+for (let i = 0; i < 100000000; i = i + 1) {
+  print "Hello" + i;
 }
-outer();
