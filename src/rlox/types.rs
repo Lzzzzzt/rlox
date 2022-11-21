@@ -217,7 +217,13 @@ impl Display for Literal {
             Literal::Number(num) => write!(f, "{}", num),
             Literal::Bool(b) => write!(f, "{}", b),
             Literal::Nil => write!(f, "nil"),
-            Literal::Function(func) => write!(f, "<func {}>", func.name),
+            Literal::Function(func) => {
+                if func.func_type == FuncType::Lambda {
+                    write!(f, "<func Lambda>")
+                } else {
+                    write!(f, "<func {}>", func.name)
+                }
+            }
         }
     }
 }
