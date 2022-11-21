@@ -27,7 +27,8 @@ lazy_static! {
         ("while", TokenType::While),
         ("continue", TokenType::Continue),
         ("break", TokenType::Break),
-        ("#[static]", TokenType::Static)
+        ("#[static]", TokenType::Static),
+        ("extend", TokenType::Extend)
     ]);
 }
 

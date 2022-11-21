@@ -169,7 +169,10 @@ impl Parser {
 
                 let lambda = Expression::create_lambda_expression(params, body);
 
-                Ok(Statement::create_expression_statement(lambda))
+                Ok(Statement::create_expression_statement(
+                    lambda,
+                    self.previous(),
+                ))
             }
             _ => Err(LoxError::create_runtime_error(
                 self.peek(),
@@ -208,7 +211,7 @@ impl Parser {
         }
 
         if self.match_one(TokenType::Print) {
-            return self.print_statement();
+            return self.print_statement(self.previous());
         }
 
         if self.match_one(TokenType::Return) {
@@ -270,27 +273,31 @@ impl Parser {
             Some(self.expression()?)
         };
 
-        self.consume(TokenType::Semicolon, "Expect ';' after loop condition")?;
+        let semicolon = self.consume(TokenType::Semicolon, "Expect ';' after loop condition")?;
 
         let increment = if self.check(TokenType::RightParen) {
+            self.consume(TokenType::RightParen, "Expect ')' after 'for'")?;
             None
         } else {
-            Some(Statement::create_expression_statement(self.expression()?))
+            let expr = self.expression()?;
+            let right_paren = self.consume(TokenType::RightParen, "Expect ')' after 'for'")?;
+            Some(Statement::create_expression_statement(expr, right_paren))
         };
-
-        self.consume(TokenType::RightParen, "Expect ')' after 'for'")?;
 
         let mut body = self.statement()?;
 
         let mut incr = None;
 
         if let Some(inc) = increment {
-            body = Statement::create_block_statement(vec![body, inc.clone()]);
             incr = Some(Box::new(inc))
         }
 
+        body = Statement::create_block_statement(vec![body]);
+
         body = Statement::create_while_statement(
-            condition.unwrap_or_else(|| Expression::create_literal_expression(Literal::Bool(true))),
+            condition.unwrap_or_else(|| {
+                Expression::create_literal_expression(Literal::Bool(true), semicolon)
+            }),
             Box::new(body),
             incr,
         );
@@ -346,7 +353,7 @@ impl Parser {
         Ok(statements)
     }
 
-    fn print_statement(&mut self) -> Result<Statement> {
+    fn print_statement(&mut self, keyword: Token) -> Result<Statement> {
         let value = self.expression()?;
 
         self.consume(
@@ -354,18 +361,18 @@ impl Parser {
             format!("Expect ';' after {}", value).as_str(),
         )?;
 
-        Ok(Statement::create_print_statement(value))
+        Ok(Statement::create_print_statement(value, keyword))
     }
 
     fn expression_statement(&mut self) -> Result<Statement> {
         let expr = self.expression()?;
 
-        self.consume(
+        let semicolon = self.consume(
             TokenType::Semicolon,
             format!("Expect ';' after {}", expr).as_str(),
         )?;
 
-        Ok(Statement::create_expression_statement(expr))
+        Ok(Statement::create_expression_statement(expr, semicolon))
     }
 
     fn assignment(&mut self) -> Result<Expression> {
@@ -573,14 +580,24 @@ impl Parser {
 
     fn primary(&mut self) -> Result<Expression> {
         if self.match_one(TokenType::False) {
-            Ok(Expression::create_literal_expression(Literal::Bool(false)))
+            Ok(Expression::create_literal_expression(
+                Literal::Bool(false),
+                self.previous(),
+            ))
         } else if self.match_one(TokenType::True) {
-            Ok(Expression::create_literal_expression(Literal::Bool(true)))
+            Ok(Expression::create_literal_expression(
+                Literal::Bool(true),
+                self.previous(),
+            ))
         } else if self.match_one(TokenType::Nil) {
-            Ok(Expression::create_literal_expression(Literal::Nil))
+            Ok(Expression::create_literal_expression(
+                Literal::Nil,
+                self.previous(),
+            ))
         } else if self.match_many(vec![TokenType::Number, TokenType::String]) {
             Ok(Expression::create_literal_expression(
                 self.previous().literal.unwrap(),
+                self.previous(),
             ))
         } else if self.match_one(TokenType::Identifier) {
             Ok(Expression::create_variable_expression(self.previous()))

@@ -8,6 +8,7 @@ use super::types::Literal;
 
 pub struct Scanner {
     source: String,
+    prev_line_lines: Vec<usize>,
     pub tokens: Vec<Token>,
 
     start: usize,
@@ -17,8 +18,26 @@ pub struct Scanner {
 
 impl Scanner {
     pub fn new(source: String) -> Self {
+        let source_lines = source
+            .split('\n')
+            .map(|v| v.to_string())
+            .collect::<Vec<String>>();
+        let all_lines = source_lines.len();
+        let mut prev_line_lines = vec![];
+
+        for line in 0..all_lines {
+            prev_line_lines.push(
+                source_lines[0..line]
+                    .iter()
+                    .map(|v| v.len() + 1)
+                    .reduce(|pre, cur| pre + cur)
+                    .unwrap_or(0),
+            );
+        }
+
         Self {
             source,
+            prev_line_lines,
             tokens: vec![],
             start: 0,
             current: 0,
@@ -180,9 +199,7 @@ impl Scanner {
 
         self.add_token_with_literal(
             TokenType::String,
-            Literal::String(Rc::new(
-                self.source[self.start + 1..self.current - 1].into(),
-            )),
+            Rc::new(self.source[self.start + 1..self.current - 1].to_string()).into(),
         );
 
         Ok(())
@@ -202,7 +219,10 @@ impl Scanner {
         }
         self.add_token_with_literal(
             TokenType::Number,
-            Literal::Number(self.source[self.start..self.current].parse().unwrap()),
+            self.source[self.start..self.current]
+                .parse::<f64>()
+                .unwrap()
+                .into(),
         );
     }
 
@@ -251,11 +271,13 @@ impl Scanner {
 
     fn add_token(&mut self, token_type: TokenType) {
         let text = &self.source[self.start..self.current];
-        let pre_lines_len = self.source.split('\n').collect::<Vec<&str>>()[0..self.line - 1]
-            .iter()
-            .map(|v| v.len() + 1)
-            .reduce(|pre, cur| pre + cur)
-            .unwrap_or(0);
+        // let pre_lines_len = self.source_lines[0..self.line - 1]
+        //     .iter()
+        //     .map(|v| v.len() + 1)
+        //     .reduce(|pre, cur| pre + cur)
+        //     .unwrap_or(0);
+
+        let pre_lines_len = self.prev_line_lines[self.line - 1];
 
         self.tokens.push(Token::new(
             token_type,
@@ -267,11 +289,13 @@ impl Scanner {
     fn add_token_with_literal(&mut self, token_type: TokenType, literal: Literal) {
         let text = &self.source[self.start..self.current];
 
-        let pre_lines_len = self.source.split('\n').collect::<Vec<&str>>()[0..self.line - 1]
-            .iter()
-            .map(|v| v.len())
-            .reduce(|pre, cur| pre + cur)
-            .unwrap_or(0);
+        // let pre_lines_len = self.source_lines[0..self.line - 1]
+        //     .iter()
+        //     .map(|v| v.len())
+        //     .reduce(|pre, cur| pre + cur)
+        //     .unwrap_or(0);
+
+        let pre_lines_len = self.prev_line_lines[self.line - 1];
 
         self.tokens.push(Token::with_literal(
             token_type,

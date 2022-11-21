@@ -19,7 +19,7 @@ pub struct Resolver {
 impl Resolver {
     pub fn new() -> Self {
         Self {
-            function_type: FuncType::None,
+            function_type: FuncType::Main,
             class_type: ClassType::None,
             is_in_while: false,
             var_use_table: HashMap::new(),
@@ -263,9 +263,10 @@ impl StmtVisitor<(), LoxError> for Resolver {
         while_statement: &super::stmt::WhileStatement,
     ) -> Result<(), LoxError> {
         self.resolve_expression(&while_statement.condition)?;
+        let pre = self.is_in_while;
         self.is_in_while = true;
         self.resolve_statement(&while_statement.body)?;
-        self.is_in_while = false;
+        self.is_in_while = pre;
         if let Some(incr) = &while_statement.increment {
             self.resolve_statement(incr)
         } else {
@@ -298,7 +299,7 @@ impl StmtVisitor<(), LoxError> for Resolver {
                 position: break_statement.token.position,
                 lexeme: break_statement.token.lexeme.clone(),
                 token_type: break_statement.token.token_type,
-                msg: String::from("`continue` can only be used in `while` or `for` statements"),
+                msg: String::from("`break` can only be used in `while` or `for` statements"),
             })
         } else {
             Ok(())
@@ -316,7 +317,7 @@ impl StmtVisitor<(), LoxError> for Resolver {
         &mut self,
         return_statement: &super::stmt::ReturnStatement,
     ) -> Result<(), LoxError> {
-        if let FuncType::None = self.function_type {
+        if let FuncType::Main = self.function_type {
             Err(LoxError::ParseError {
                 position: return_statement.key_word.position,
                 lexeme: return_statement.key_word.lexeme.clone(),

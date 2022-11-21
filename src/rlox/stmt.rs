@@ -57,8 +57,8 @@ macro_rules! stmt {
 }
 
 stmt! {
-    ExpressionStatement { expression: Expression },
-    PrintStatement { expression: Expression },
+    ExpressionStatement { expression: Expression, end: Token },
+    PrintStatement { expression: Expression, keyword: Token },
     VarStatement { name: Token, initializer: Option<Expression> },
     MultiVarStatement { vars: Vec<Statement> },
     BlockStatement { statements: Vec<Statement> },

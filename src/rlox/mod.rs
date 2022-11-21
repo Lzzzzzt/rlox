@@ -1,13 +1,11 @@
-mod callable;
-mod environment;
+mod bytecode_interpreter;
 mod error;
 mod expr;
-mod interpreter;
 pub mod lox;
 mod parser;
+mod repl;
 mod resolver;
 mod scanner;
 mod stmt;
 mod token;
 mod types;
-mod repl;

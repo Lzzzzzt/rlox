@@ -1,9 +1,9 @@
-func fib(n) {
-    if (n < 2) {
-        return n;
-    }
-    return fib(n - 1) + fib(n - 2);
+let x = "global";
+func outer() {
+  let x = "outer";
+  func inner() {
+    print x;
+  }
+  inner();
 }
-
-#[static]
-fib(30);
+outer();

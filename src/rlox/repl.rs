@@ -5,7 +5,7 @@ use rustyline_derive::{Completer, Helper, Hinter, Validator};
 
 use std::borrow::Cow::{self, Borrowed};
 
-use super::interpreter::Interpreter;
+use super::bytecode_interpreter::vm::VirtualMachine;
 use super::lox::{self, Lox};
 use super::scanner::Scanner;
 use super::token::Token;
@@ -53,9 +53,9 @@ impl Repl {
         Self { editor }
     }
 
-    pub fn run(&mut self, run_fn: fn(interpreter: &mut Interpreter, tokens: Vec<Token>) -> ()) {
+    pub fn run(&mut self, run_fn: fn(vm: &mut VirtualMachine, tokens: Vec<Token>) -> ()) {
         let mut count = 1;
-        let mut interpreter = Interpreter::new();
+        let mut vm = VirtualMachine::new();
 
         loop {
             let p = format!("[{count:4}]: ");
@@ -71,7 +71,7 @@ impl Repl {
                         lox::had_error();
                     }
 
-                    run_fn(&mut interpreter, scanner.tokens);
+                    run_fn(&mut vm, scanner.tokens);
                 }
                 Err(_) => break,
             }

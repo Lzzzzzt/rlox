@@ -1,9 +1,6 @@
 use std::{io, rc::Rc, result};
 
-use super::{
-    token::Token,
-    types::{Literal, TokenType},
-};
+use super::{token::Token, types::TokenType};
 
 pub type Result<T, E = LoxError> = result::Result<T, E>;
 
@@ -28,18 +25,8 @@ pub enum LoxError {
         lexeme: Rc<String>,
         msg: String,
     },
-    Break {
-        position: (usize, usize),
-        lexeme: Rc<String>,
-        msg: String,
-    },
-    Continue {
-        position: (usize, usize),
-        lexeme: Rc<String>,
-        msg: String,
-    },
-    Return {
-        value: Literal,
+    UnexpectedError {
+        message: String,
     },
 }
 
@@ -50,26 +37,6 @@ impl LoxError {
             lexeme: token.lexeme.clone(),
             msg,
         }
-    }
-
-    pub fn create_break(token: &Token, msg: String) -> Self {
-        Self::Break {
-            position: token.position,
-            lexeme: token.lexeme.clone(),
-            msg,
-        }
-    }
-
-    pub fn create_continue(token: &Token, msg: String) -> Self {
-        Self::Continue {
-            position: token.position,
-            lexeme: token.lexeme.clone(),
-            msg,
-        }
-    }
-
-    pub fn create_return(value: Literal) -> Self {
-        Self::Return { value }
     }
 }
 
