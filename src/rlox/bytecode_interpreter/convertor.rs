@@ -404,6 +404,74 @@ impl ExprVisitor<(), LoxError> for Convertor {
 
         Ok(())
     }
+
+    fn visit_operate_and_assign_expression(
+        &mut self,
+        operate_and_assign_expression: &crate::rlox::expr::OperateAndAssignExpression,
+    ) -> Result<(), LoxError> {
+        match self
+            .scopes
+            .find_variable(operate_and_assign_expression.name.lexeme.clone())
+        {
+            Ok(i) => {
+                self.convert_expression(&operate_and_assign_expression.value)?;
+                let pos = operate_and_assign_expression.name.position;
+                match operate_and_assign_expression.op.token_type {
+                    TokenType::PlusEqual => {
+                        self.current_chunk().write(OpCode::AddILocal(i), pos);
+                    }
+                    TokenType::MinusEqual => {
+                        self.current_chunk().write(OpCode::SubILocal(i), pos);
+                    }
+                    TokenType::StarEqual => {
+                        self.current_chunk().write(OpCode::MulILocal(i), pos);
+                    }
+                    TokenType::SlashEqual => {
+                        self.current_chunk().write(OpCode::DivILocal(i), pos);
+                    }
+                    TokenType::ModEqual => {
+                        self.current_chunk().write(OpCode::ModILocal(i), pos);
+                    }
+                    _ => {
+                        return Err(LoxError::create_runtime_error(
+                            &operate_and_assign_expression.op,
+                            "Unexpected Operator".into(),
+                        ))
+                    }
+                }
+            }
+            Err(_) => {
+                self.convert_expression(&operate_and_assign_expression.value)?;
+                let name = operate_and_assign_expression.name.lexeme.clone();
+                let pos = operate_and_assign_expression.name.position;
+                match operate_and_assign_expression.op.token_type {
+                    TokenType::PlusEqual => {
+                        self.current_chunk().write(OpCode::AddIGlobal(name), pos);
+                    }
+                    TokenType::MinusEqual => {
+                        self.current_chunk().write(OpCode::SubIGlobal(name), pos);
+                    }
+                    TokenType::StarEqual => {
+                        self.current_chunk().write(OpCode::MulIGlobal(name), pos);
+                    }
+                    TokenType::SlashEqual => {
+                        self.current_chunk().write(OpCode::DivIGlobal(name), pos);
+                    }
+                    TokenType::ModEqual => {
+                        self.current_chunk().write(OpCode::ModIGlobal(name), pos);
+                    }
+                    _ => {
+                        return Err(LoxError::create_runtime_error(
+                            &operate_and_assign_expression.op,
+                            "Unexpected Operator".into(),
+                        ))
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 impl StmtVisitor<(), LoxError> for Convertor {

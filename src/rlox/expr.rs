@@ -71,6 +71,7 @@ expr! {
     UnaryExpression { op: Token, right: Box<Expression> },
     VariableExpression { name: Token },
     LambdaExpression { params: Vec<Token>, body: Vec<Statement> },
+    OperateAndAssignExpression { name: Token, op: Token, value: Box<Expression> }
 }
 
 impl Display for Expression {
@@ -109,6 +110,9 @@ impl Display for Expression {
                     .collect::<Vec<String>>()
                     .join(", ")
             ),
+            Expression::OperateAndAssignExpression(s) => {
+                write!(f, "{} {} {}", s.name.lexeme, s.op.lexeme, s.value)
+            }
         }
     }
 }

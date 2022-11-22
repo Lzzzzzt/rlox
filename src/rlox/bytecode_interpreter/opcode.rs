@@ -30,6 +30,17 @@ pub enum OpCode {
     JumpIfFalse(usize),
 
     Call(usize),
+
+    AddIGlobal(Rc<String>),
+    SubIGlobal(Rc<String>),
+    MulIGlobal(Rc<String>),
+    DivIGlobal(Rc<String>),
+    ModIGlobal(Rc<String>),
+    AddILocal(usize),
+    SubILocal(usize),
+    MulILocal(usize),
+    DivILocal(usize),
+    ModILocal(usize),
 }
 
 impl From<Literal> for OpCode {
@@ -51,7 +62,7 @@ impl Display for OpCode {
             OpCode::Negate => write!(f, "{:<24}", "NEGATE"),
             OpCode::Add => write!(f, "{:<24}", "ADD"),
             OpCode::Sub => write!(f, "{:<24}", "SUB"),
-            OpCode::Mul => write!(f, "{:<24}", "MULTI"),
+            OpCode::Mul => write!(f, "{:<24}", "MUL"),
             OpCode::Div => write!(f, "{:<24}", "DIV"),
             OpCode::Mod => write!(f, "{:<24}", "MOD"),
             OpCode::Not => write!(f, "{:<24}", "NOT"),
@@ -70,6 +81,16 @@ impl Display for OpCode {
             OpCode::JumpIfTrue(v) => write!(f, "{:<15} {:>8}", "JUMP_IF_TRUE", v),
             OpCode::JumpIfFalse(v) => write!(f, "{:<15} {:>8}", "JUMP_IF_FALSE", v),
             OpCode::Call(v) => write!(f, "{:<15} {:>8}", "CALL", v),
+            OpCode::AddIGlobal(v) => write!(f, "{:<15} {:>8}", "ADD_I_GLOBAL", v),
+            OpCode::SubIGlobal(v) => write!(f, "{:<15} {:>8}", "SUB_I_GLOBAL", v),
+            OpCode::MulIGlobal(v) => write!(f, "{:<15} {:>8}", "MUL_I_GLOBAL", v),
+            OpCode::DivIGlobal(v) => write!(f, "{:<15} {:>8}", "DIV_I_GLOBAL", v),
+            OpCode::ModIGlobal(v) => write!(f, "{:<15} {:>8}", "MOD_I_GLOBAL", v),
+            OpCode::AddILocal(v) => write!(f, "{:<15} {:>8}", "ADD_I_LOCAL", v),
+            OpCode::SubILocal(v) => write!(f, "{:<15} {:>8}", "SUB_I_LOCAL", v),
+            OpCode::MulILocal(v) => write!(f, "{:<15} {:>8}", "MUL_I_LOCAL", v),
+            OpCode::DivILocal(v) => write!(f, "{:<15} {:>8}", "DIV_I_LOCAL", v),
+            OpCode::ModILocal(v) => write!(f, "{:<15} {:>8}", "MOD_I_LOCAL", v),
         }
     }
 }

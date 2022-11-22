@@ -201,6 +201,13 @@ impl ExprVisitor<(), LoxError> for Resolver {
     ) -> Result<(), LoxError> {
         self.resolve_statements(&lambda_expression.body)
     }
+
+    fn visit_operate_and_assign_expression(
+        &mut self,
+        operate_and_assign_expression: &super::expr::OperateAndAssignExpression,
+    ) -> Result<(), LoxError> {
+        self.resolve_expression(&operate_and_assign_expression.value)
+    }
 }
 
 #[allow(unused)]

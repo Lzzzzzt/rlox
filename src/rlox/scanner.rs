@@ -77,11 +77,43 @@ impl Scanner {
             '}' => self.add_token(TokenType::RightBrace),
             ',' => self.add_token(TokenType::Comma),
             '.' => self.add_token(TokenType::Dot),
-            '+' => self.add_token(TokenType::Plus),
-            '-' => self.add_token(TokenType::Minus),
-            '*' => self.add_token(TokenType::Star),
+            '+' => {
+                let token = if self.expected('=') {
+                    self.advance();
+                    TokenType::PlusEqual
+                } else {
+                    TokenType::Plus
+                };
+                self.add_token(token)
+            }
+            '-' => {
+                let token = if self.expected('=') {
+                    self.advance();
+                    TokenType::MinusEqual
+                } else {
+                    TokenType::Minus
+                };
+                self.add_token(token)
+            }
+            '*' => {
+                let token = if self.expected('=') {
+                    self.advance();
+                    TokenType::StarEqual
+                } else {
+                    TokenType::Star
+                };
+                self.add_token(token)
+            }
             ';' => self.add_token(TokenType::Semicolon),
-            '%' => self.add_token(TokenType::Mod),
+            '%' => {
+                let token = if self.expected('=') {
+                    self.advance();
+                    TokenType::ModEqual
+                } else {
+                    TokenType::Mod
+                };
+                self.add_token(token)
+            },
             '!' => {
                 let token = if self.expected('=') {
                     self.advance();
@@ -125,7 +157,13 @@ impl Scanner {
                         self.advance();
                     }
                 } else {
-                    self.add_token(TokenType::Slash);
+                    let token = if self.expected('=') {
+                        self.advance();
+                        TokenType::SlashEqual
+                    } else {
+                        TokenType::Slash
+                    };
+                    self.add_token(token)
                 }
             }
             '#' => self.parse_modifier()?,
@@ -172,7 +210,7 @@ impl Scanner {
                 return Err(LoxError::ParseTokenError {
                     position: (self.line, self.start + 1),
                     msg: "Unknown modifier",
-                })
+                });
             }
             Some(token_type) => self.add_token(*token_type),
         }

@@ -378,15 +378,37 @@ impl Parser {
     fn assignment(&mut self) -> Result<Expression> {
         let expr = self.or()?;
 
-        if self.match_one(TokenType::Equal) {
-            let eq = self.previous();
+        if self.match_many(vec![
+            TokenType::Equal,
+            TokenType::PlusEqual,
+            TokenType::MinusEqual,
+            TokenType::StarEqual,
+            TokenType::SlashEqual,
+            TokenType::ModEqual,
+        ]) {
+            let op = self.previous();
             let value = self.assignment()?;
 
             if let Expression::VariableExpression(e) = expr {
-                return Ok(Expression::create_assign_expression(
-                    e.name,
-                    Box::new(value),
-                ));
+                match op.token_type {
+                    TokenType::PlusEqual
+                    | TokenType::MinusEqual
+                    | TokenType::StarEqual
+                    | TokenType::SlashEqual
+                    | TokenType::ModEqual => {
+                        return Ok(Expression::create_operate_and_assign_expression(
+                            e.name,
+                            op,
+                            Box::new(value),
+                        ))
+                    }
+                    _ => {
+                        return Ok(Expression::create_assign_expression(
+                            e.name,
+                            Box::new(value),
+                        ));
+                    }
+                }
             } else if let Expression::GetExpression(g) = expr {
                 return Ok(Expression::create_set_expression(
                     g.object,
@@ -396,7 +418,7 @@ impl Parser {
             }
 
             return Err(LoxError::create_runtime_error(
-                &eq,
+                &op,
                 "Invalid assignment target".into(),
             ));
         }

@@ -21,12 +21,6 @@ impl Chunk {
         self.len() - 1
     }
 
-    #[allow(unused)]
-    pub fn insert(&mut self, index: usize, opcode: OpCode, position: (usize, usize)) {
-        self.codes.insert(index, opcode);
-        self.positions.insert(index, position);
-    }
-
     #[inline]
     pub fn get(&self, index: usize) -> Option<&OpCode> {
         self.codes.get(index)

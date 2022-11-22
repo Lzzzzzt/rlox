@@ -19,45 +19,39 @@ impl VirtualMachine {
         Self {
             frames: Default::default(),
             is_repl: std::env::var("RLOX_RUN_MODE").unwrap() == "R",
-            stack: Vec::with_capacity(256),
-            globals: HashMap::with_capacity(256),
+            stack: Vec::with_capacity(1024),
+            globals: HashMap::with_capacity(1024),
         }
     }
 
-    fn read_opcode<'a>(&self, frame: &'a mut CallFrame) -> Result<&'a OpCode, LoxError> {
-        let opcode = match frame.function.chunk.get(frame.ip) {
-            Some(opcode) => Ok(opcode),
-            None => Err(LoxError::UnexpectedError {
-                message: String::from("EOF!"),
-            }),
-        }?;
-        frame.ip += 1;
-
-        Ok(opcode)
-    }
-
+    #[inline]
     fn pop(&mut self) -> Literal {
-        self.stack.pop().expect("Stack is already empty!")
+        self.stack.pop().unwrap()
     }
 
+    #[inline]
     fn push(&mut self, value: Literal) {
         self.stack.push(value)
     }
 
+    #[inline]
     fn stack_top_clone(&self) -> Literal {
         self.stack[self.stack.len() - 1].clone()
     }
 
+    #[inline]
     fn stack_top_ref(&self) -> &Literal {
         self.stack.last().unwrap()
     }
 
+    #[inline]
     fn stack_top_mut(&mut self) -> &mut Literal {
         self.stack.last_mut().unwrap()
     }
 
+    #[inline]
     fn stack_nth(&self, i: usize) -> &Literal {
-        &self.stack[self.stack.len() - i - 1]
+        self.stack.get(self.stack.len() - i - 1).unwrap()
     }
 
     fn binary_add(&mut self) -> Result<(), &'static str> {
@@ -84,10 +78,10 @@ impl VirtualMachine {
             let right = self.pop().get_num().unwrap();
             let left = self.stack_top_ref().get_num().unwrap();
             *self.stack_top_mut() = (left - right).into();
+            Ok(())
         } else {
-            return Err("Operands must be two numbers");
+            Err("Operands must be two numbers")
         }
-        Ok(())
     }
 
     fn binary_multi(&mut self) -> Result<(), &'static str> {
@@ -140,10 +134,10 @@ impl VirtualMachine {
             let right = self.pop().get_num().unwrap();
             let left = self.stack_top_ref().get_num().unwrap();
             *self.stack_top_mut() = (left < right).into();
+            Ok(())
         } else {
-            return Err("Operands must be two numbers");
+            Err("Operands must be two numbers")
         }
-        Ok(())
     }
 
     fn binary_greater(&mut self) -> Result<(), &'static str> {
@@ -151,17 +145,17 @@ impl VirtualMachine {
             let right = self.pop().get_num().unwrap();
             let left = self.stack_top_ref().get_num().unwrap();
             *self.stack_top_mut() = (left > right).into();
+            Ok(())
         } else {
-            return Err("Operands must be two numbers");
+            Err("Operands must be two numbers")
         }
-        Ok(())
     }
 
     pub fn run(&mut self) -> Result<(), LoxError> {
         let mut frame = self.frames.pop().unwrap();
         let mut base = frame.slot;
 
-        while let Ok(opcode) = self.read_opcode(&mut frame) {
+        while let Some(opcode) = frame.read_opcode() {
             // sleep(Duration::from_millis(500));
             // println!(
             //     "[{}] --> [{}]",
@@ -319,7 +313,227 @@ impl VirtualMachine {
                     self.frames.push(frame);
                     frame = CallFrame::new(callee, 0, self.stack.len() - arity - 1);
                     base = frame.slot;
-                    // todo!()
+                }
+                OpCode::AddIGlobal(name) => {
+                    let name = name.clone();
+                    if self.globals.contains_key(&name) {
+                        let target = self.globals.get(&name).unwrap().clone();
+                        if target.is_num() && self.stack_top_ref().is_num() {
+                            let v =
+                                target.get_num().unwrap() + self.stack_top_ref().get_num().unwrap();
+                            self.globals.insert(name, v.into());
+                        } else {
+                            return Err(self.create_runtime_error(
+                                &frame,
+                                "+=",
+                                "Operator '+=' can only be used on number",
+                            ));
+                        }
+                    } else {
+                        return Err(self.create_runtime_error(
+                            &frame,
+                            &name,
+                            format!("Undefined variable `{}`.", &name).as_str(),
+                        ));
+                    }
+                }
+                OpCode::SubIGlobal(name) => {
+                    let name = name.clone();
+                    if self.globals.contains_key(&name) {
+                        let target = self.globals.get(&name).unwrap().clone();
+                        if target.is_num() && self.stack_top_ref().is_num() {
+                            let v = target.get_num()? - self.stack_top_ref().get_num()?;
+                            self.globals.insert(name, v.into());
+                        } else {
+                            return Err(self.create_runtime_error(
+                                &frame,
+                                "-=",
+                                "Operator '-=' can only be used on number",
+                            ));
+                        }
+                    } else {
+                        return Err(self.create_runtime_error(
+                            &frame,
+                            &name,
+                            format!("Undefined variable `{}`.", &name).as_str(),
+                        ));
+                    }
+                }
+                OpCode::MulIGlobal(name) => {
+                    let name = name.clone();
+                    if self.globals.contains_key(&name) {
+                        let target = self.globals.get(&name).unwrap().clone();
+                        if target.is_num() && self.stack_top_ref().is_num() {
+                            let v = target.get_num()? * self.stack_top_ref().get_num()?;
+                            self.globals.insert(name, v.into());
+                        } else {
+                            return Err(self.create_runtime_error(
+                                &frame,
+                                "+=",
+                                "Operator '*=' can only be used on number",
+                            ));
+                        }
+                    } else {
+                        return Err(self.create_runtime_error(
+                            &frame,
+                            &name,
+                            format!("Undefined variable `{}`.", &name).as_str(),
+                        ));
+                    }
+                }
+                OpCode::DivIGlobal(name) => {
+                    let name = name.clone();
+                    if self.globals.contains_key(&name) {
+                        let target = self.globals.get(&name).unwrap().clone();
+                        if target.is_num() && self.stack_top_ref().is_num() {
+                            let divisor = self.stack_top_ref().get_num()?;
+
+                            if divisor == 0.0 {
+                                return Err(self.create_runtime_error(
+                                    &frame,
+                                    "%=",
+                                    "divisor cannot be 0.",
+                                ));
+                            }
+
+                            let v = target.get_num()? / divisor;
+                            self.globals.insert(name, v.into());
+                        } else {
+                            return Err(self.create_runtime_error(
+                                &frame,
+                                "/=",
+                                "Operator '/=' can only be used on number",
+                            ));
+                        }
+                    } else {
+                        return Err(self.create_runtime_error(
+                            &frame,
+                            &name,
+                            format!("Undefined variable `{}`.", &name).as_str(),
+                        ));
+                    }
+                }
+                OpCode::ModIGlobal(name) => {
+                    let name = name.clone();
+                    if self.globals.contains_key(&name) {
+                        let target = self.globals.get(&name).unwrap().clone();
+                        if target.is_num() && self.stack_top_ref().is_num() {
+                            let divisor = self.stack_top_ref().get_num()? as i64;
+
+                            if divisor == 0 {
+                                return Err(self.create_runtime_error(
+                                    &frame,
+                                    "%=",
+                                    "divisor cannot be 0.",
+                                ));
+                            }
+
+                            let v = (target.get_num()? as i64 % divisor) as f64;
+                            self.globals.insert(name, v.into());
+                        } else {
+                            return Err(self.create_runtime_error(
+                                &frame,
+                                "%=",
+                                "Operator '%=' can only be used on number",
+                            ));
+                        }
+                    } else {
+                        return Err(self.create_runtime_error(
+                            &frame,
+                            &name,
+                            format!("Undefined variable `{}`.", &name).as_str(),
+                        ));
+                    }
+                }
+                OpCode::AddILocal(slot) => {
+                    let slot = slot + base;
+                    let target = &self.stack[slot];
+                    if target.is_num() && self.stack_top_ref().is_num() {
+                        let v = target.get_num()? + self.stack_top_ref().get_num()?;
+                        self.stack[slot] = v.into();
+                    } else {
+                        return Err(self.create_runtime_error(
+                            &frame,
+                            "+=",
+                            "Operator '+=' can only be used on number",
+                        ));
+                    }
+                }
+                OpCode::SubILocal(slot) => {
+                    let slot = slot + base;
+                    let target = &self.stack[slot];
+                    if target.is_num() && self.stack_top_ref().is_num() {
+                        let v = target.get_num()? - self.stack_top_ref().get_num()?;
+                        self.stack[slot] = v.into();
+                    } else {
+                        return Err(self.create_runtime_error(
+                            &frame,
+                            "-=",
+                            "Operator '-=' can only be used on number",
+                        ));
+                    }
+                }
+                OpCode::MulILocal(slot) => {
+                    let slot = slot + base;
+                    let target = &self.stack[slot];
+                    if target.is_num() && self.stack_top_ref().is_num() {
+                        let v = target.get_num()? * self.stack_top_ref().get_num()?;
+                        self.stack[slot] = v.into();
+                    } else {
+                        return Err(self.create_runtime_error(
+                            &frame,
+                            "*=",
+                            "Operator '*=' can only be used on number",
+                        ));
+                    }
+                }
+                OpCode::DivILocal(slot) => {
+                    let slot = slot + base;
+                    let target = &self.stack[slot];
+                    if target.is_num() && self.stack_top_ref().is_num() {
+                        let divisor = self.stack_top_ref().get_num()?;
+
+                        if divisor == 0.0 {
+                            return Err(self.create_runtime_error(
+                                &frame,
+                                "/=",
+                                "divisor cannot be 0.",
+                            ));
+                        }
+
+                        let v = target.get_num()? / divisor;
+                        self.stack[slot] = v.into();
+                    } else {
+                        return Err(self.create_runtime_error(
+                            &frame,
+                            "%=",
+                            "Operator '%=' can only be used on number",
+                        ));
+                    }
+                }
+                OpCode::ModILocal(slot) => {
+                    let slot = slot + base;
+                    let target = &self.stack[slot];
+                    if target.is_num() && self.stack_top_ref().is_num() {
+                        let divisor = self.stack_top_ref().get_num()?;
+
+                        if divisor == 0.0 {
+                            return Err(self.create_runtime_error(
+                                &frame,
+                                "%=",
+                                "divisor cannot be 0.",
+                            ));
+                        }
+
+                        let v = target.get_num()? / divisor;
+                        self.stack[slot] = v.into();
+                    } else {
+                        return Err(self.create_runtime_error(
+                            &frame,
+                            "%=",
+                            "Operator '%=' can only be used on number",
+                        ));
+                    }
                 }
             }
         }
@@ -332,7 +546,23 @@ impl VirtualMachine {
         let frame = CallFrame::new(func, 0, self.stack.len());
         self.frames.push(frame);
 
-        self.run()
+        match self.run() {
+            Ok(_) => {
+                // println!(
+                //     "[{}]",
+                //     self.stack
+                //         .iter()
+                //         .map(|v| v.to_string())
+                //         .collect::<Vec<String>>()
+                //         .join(", ")
+                // );
+                Ok(())
+            }
+            Err(e) => {
+                self.stack.clear();
+                Err(e)
+            }
+        }
     }
 
     fn create_runtime_error(&mut self, frame: &CallFrame, op: &str, msg: &str) -> LoxError {
@@ -369,5 +599,14 @@ struct CallFrame {
 impl CallFrame {
     fn new(function: Rc<Function>, ip: usize, slot: usize) -> Self {
         Self { function, ip, slot }
+    }
+    pub fn read_opcode(&mut self) -> Option<&OpCode> {
+        match self.function.chunk.get(self.ip) {
+            Some(opcode) => {
+                self.ip += 1;
+                Some(opcode)
+            }
+            None => None,
+        }
     }
 }
