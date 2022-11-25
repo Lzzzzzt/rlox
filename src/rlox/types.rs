@@ -153,7 +153,7 @@ impl Literal {
 
     pub fn get_string(&self) -> Result<Rc<String>> {
         if let Literal::String(string) = self {
-            return Ok(string.clone());
+            return Ok(Rc::clone(string));
         }
 
         Err(LoxError::UnexpectedError {
@@ -199,7 +199,7 @@ impl Literal {
 
     pub fn get_function(&self) -> Result<Rc<Function>> {
         if let Literal::Function(func) = self {
-            return Ok(func.clone());
+            return Ok(Rc::clone(func));
         }
 
         Err(LoxError::UnexpectedError {

@@ -55,16 +55,13 @@ impl VirtualMachine {
     }
 
     fn binary_add(&mut self) -> Result<(), &'static str> {
-        if self.stack_nth(1).is_num() && self.stack_nth(0).is_num() {
-            let right = self.pop().get_num().unwrap();
+        let right = self.pop();
+        if self.stack_nth(1).is_num() && right.is_num() {
+            let right = right.get_num().unwrap();
             let left = self.stack_top_ref().get_num().unwrap();
             *self.stack_top_mut() = (left + right).into();
-        } else if self.stack_nth(1).is_string() && self.stack_nth(0).is_string() {
-            let right = self.pop().get_num().unwrap().to_string();
-            let left = self.stack_top_ref().get_string().unwrap().to_string();
-            *self.stack_top_mut() = Rc::new(left + &right).into();
         } else if self.stack_nth(1).is_string() {
-            let right = self.pop().to_string();
+            let right = right.to_string();
             let left = self.stack_top_ref().get_string().unwrap().to_string();
             *self.stack_top_mut() = Rc::new(left + &right).into();
         } else {
@@ -369,7 +366,7 @@ impl VirtualMachine {
                         } else {
                             return Err(self.create_runtime_error(
                                 &frame,
-                                "+=",
+                                "*=",
                                 "Operator '*=' can only be used on number",
                             ));
                         }
@@ -506,8 +503,8 @@ impl VirtualMachine {
                     } else {
                         return Err(self.create_runtime_error(
                             &frame,
-                            "%=",
-                            "Operator '%=' can only be used on number",
+                            "/=",
+                            "Operator '/=' can only be used on number",
                         ));
                     }
                 }
@@ -566,7 +563,7 @@ impl VirtualMachine {
     }
 
     fn create_runtime_error(&mut self, frame: &CallFrame, op: &str, msg: &str) -> LoxError {
-        let ip = frame.ip;
+        let ip = frame.ip - 1;
         let pos = frame.function.chunk.get_position(ip).unwrap();
         let mut msgs = vec![msg.to_string()];
         for fm in self.frames.iter().rev() {
